@@ -220,18 +220,34 @@ def main():
                 clear_tokens()
             sys.exit(1)
 
-        branch_names = [branch["name"] for branch in branches_json]
-        print("Bitte wähle einen Branch aus, von dem installiert werden soll:")
-        for i, name in enumerate(branch_names, 1):
+        all_branch_names = [branch["name"] for branch in branches_json]
+        branches_with_artifacts = []
+        print_info("Prüfe Branches auf verfügbare Artefakte...")
+
+        for name in all_branch_names:
+            print(f"  - Prüfe Branch '{name}'...")
+            url = f"https://api.github.com/repos/{REPO}/actions/runs?branch={name}&status=success&per_page=1"
+            run_response = requests.get(url, headers=headers)
+            if run_response.status_code == 200:
+                runs_json = run_response.json()
+                if runs_json.get("workflow_runs"):
+                    branches_with_artifacts.append(name)
+
+        if not branches_with_artifacts:
+            print_error("Keine Branches mit erfolgreichen Builds und Artefakten gefunden.")
+            sys.exit(1)
+
+        print("\nBitte wähle einen Branch aus, von dem installiert werden soll:")
+        for i, name in enumerate(branches_with_artifacts, 1):
             print(f"{i}) {name}")
 
         choice = -1
-        while choice < 1 or choice > len(branch_names):
+        while choice < 1 or choice > len(branches_with_artifacts):
             try:
-                choice = int(input(f"Auswahl (1-{len(branch_names)}): "))
+                choice = int(input(f"Auswahl (1-{len(branches_with_artifacts)}): "))
             except ValueError:
                 pass
-        branch = branch_names[choice - 1]
+        branch = branches_with_artifacts[choice - 1]
         print_info(f"Du hast Branch '{branch}' ausgewählt.")
 
     except requests.RequestException as e:
