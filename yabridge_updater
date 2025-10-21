@@ -16,7 +16,7 @@ REPO = "robbert-vdh/yabridge"
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "yabridge-updater"
 TOKEN_FILE = CONFIG_DIR / "token"
-VERSION_FILE = CONFIG_DIR / "version"
+VERSION_FILE = CONFIG_DIR / "version" # Legacy, now stored in install dir
 PATH_CONFIG_FILE = CONFIG_DIR / "path"
 
 # --- Helper Functions ---
@@ -55,7 +55,6 @@ def get_github_token_from_keyring():
             return result.stdout.strip()
         elif result.returncode != 0:
             stderr_msg = result.stderr.strip()
-            # Only show an error if it's not the standard "secret not found" message.
             if "No such secret" not in stderr_msg and stderr_msg:
                 print_error(f"Fehler beim Zugriff auf den Schlüsselbund mit secret-tool (Code: {result.returncode}):")
                 print_error(f"  Details: {stderr_msg}")
@@ -251,9 +250,8 @@ def perform_installation(artifacts_url, headers, yabridge_dir, remote_version):
         download_and_extract("libs", libs_artifact["archive_download_url"], headers, tmp_path, yabridge_dir)
 
         CONFIG_DIR.mkdir(exist_ok=True)
-        VERSION_FILE.write_text(remote_version)
-        PATH_CONFIG_FILE.write_text(str(yabridge_dir))
         (yabridge_dir / ".version").write_text(remote_version)
+        PATH_CONFIG_FILE.write_text(str(yabridge_dir))
         print_info(f"Update auf Version {remote_version} abgeschlossen.")
         print_info(f"Installationspfad in {PATH_CONFIG_FILE} gespeichert.")
 
@@ -339,7 +337,8 @@ def restore_from_backup(yabridge_dir):
         restored_version_file = yabridge_dir / ".version"
         if restored_version_file.is_file():
             restored_version = restored_version_file.read_text().strip()
-            VERSION_FILE.write_text(restored_version)
+            VERSION_FILE.write_text(restored_version) # Write to legacy central file for now
+            (yabridge_dir / ".version").write_text(restored_version) # Ensure it exists in the new location too
             print_info(f"Zentrale Versionsdatei auf {restored_version[:7]} aktualisiert.")
         print_info("Wiederherstellung erfolgreich!")
     except OSError as e:
@@ -350,12 +349,17 @@ def restore_from_backup(yabridge_dir):
         sys.exit(1)
 
 def handle_arguments():
-    parser = argparse.ArgumentParser(description="Lädt die neueste Entwicklerversion von yabridge herunter.", formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("--update-token", action="store_true", help="Gespeicherte GitHub-Tokens löschen und neu eingeben.")
-    parser.add_argument("--install-path", type=Path, default=None, help="Benutzerdefinierter Installationspfad für yabridge.\nStandard: ~/.local/share/yabridge")
-    parser.add_argument("--prune-backups", type=int, nargs='?', const=5, default=None, metavar='N', help="Lösche alte Backups und behalte nur die letzten N.\nStandard, wenn Flag gesetzt ist: 5.")
-    parser.add_argument("--status", action="store_true", help="Zeigt die aktuell installierte Version und den Pfad an, ohne ein Update auszuführen.")
-    parser.add_argument("--restore", action="store_true", help="Stellt eine frühere Version aus einem Backup wieder her.")
+    parser = argparse.ArgumentParser(description="Ein Skript zum Herunterladen und Verwalten von Entwicklerversionen von yabridge.", formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument("--install-path", type=Path, default=None, help="Benutzerdefinierter Installationspfad für yabridge. Überschreibt gespeicherte Pfade.")
+    subparsers = parser.add_subparsers(dest="command", title="Befehle")
+
+    subparsers.add_parser("update", help="Sucht nach Updates und installiert sie (Standardaktion)." )
+    subparsers.add_parser("status", help="Zeigt die aktuell installierte Version und den Pfad an.")
+    subparsers.add_parser("restore", help="Stellt eine frühere Version aus einem Backup wieder her.")
+    prune_parser = subparsers.add_parser("prune-backups", help="Löscht alte Backups.")
+    prune_parser.add_argument("keep", type=int, nargs="?", default=5, help="Anzahl der zu behaltenden Backups (Standard: 5)." )
+    token_parser = subparsers.add_parser("token", help="Verwaltet den gespeicherten GitHub-Token.")
+    token_parser.add_argument("--clear", action="store_true", help="Löscht den gespeicherten GitHub-Token.")
     return parser.parse_args()
 
 def determine_install_path(args):
@@ -375,65 +379,67 @@ def determine_install_path(args):
 def main():
     """Main script logic."""
     args = handle_arguments()
+    command = args.command if args.command else 'update'
     yabridge_dir, yabridgectl_path = determine_install_path(args)
 
-    # Handle standalone commands first
-    if args.restore:
+    if command == 'status':
+        print_info("Status der yabridge-Installation:")
+        print(f"  Installationspfad: {yabridge_dir}")
+        if yabridgectl_path.exists(): print(f"  yabridgectl gefunden: Ja")
+        else: print(f"  yabridgectl gefunden: Nein (Installation ist beschädigt oder nicht vorhanden)")
+        version_file_in_install = yabridge_dir / ".version"
+        if version_file_in_install.is_file():
+            print(f"  Installierte Version (SHA): {version_file_in_install.read_text().strip()}")
+        elif VERSION_FILE.exists():
+             print(f"  Installierte Version (SHA): {VERSION_FILE.read_text().strip()} (aus zentraler Konfig)")
+        else: print("  Installierte Version (SHA): Unbekannt (keine Versionsdatei gefunden)")
+        sys.exit(0)
+
+    if command == 'restore':
         restore_from_backup(yabridge_dir)
         run_sync(yabridgectl_path)
         print_info("Wiederherstellungsprozess abgeschlossen.")
         sys.exit(0)
 
-    if args.status:
-        print_info("Status der yabridge-Installation:")
-        print(f"  Installationspfad: {yabridge_dir}")
-        if yabridgectl_path.exists():
-            print(f"  yabridgectl gefunden: Ja")
-        else:
-            print(f"  yabridgectl gefunden: Nein (Installation ist beschädigt oder nicht vorhanden)")
-        if VERSION_FILE.exists():
-            local_version = VERSION_FILE.read_text().strip()
-            print(f"  Installierte Version (SHA): {local_version}")
-        else:
-            print("  Installierte Version (SHA): Unbekannt (keine Versionsdatei gefunden)")
+    if command == 'prune-backups':
+        prune_backups(yabridge_dir.parent, args.keep)
         sys.exit(0)
 
-    if args.prune_backups is not None:
-        prune_backups(yabridge_dir.parent, args.prune_backups)
+    if command == 'token':
+        if args.clear: clear_tokens()
+        else: print_info("Verwende 'token --clear' zum Löschen des Tokens.")
         sys.exit(0)
 
-    if args.update_token: 
-        clear_tokens()
-        sys.exit(0)
+    if command == 'update':
+        token, token_source = get_token()
+        if not token: 
+            print_error("Kein GitHub Token verfügbar. Abbruch.")
+            sys.exit(1)
 
-    # If no standalone command was given, proceed with the update process
-    token, token_source = get_token()
-    if not token: 
-        print_error("Kein GitHub Token verfügbar. Abbruch.")
-        sys.exit(1)
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
 
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
+        try:
+            branch = select_branch(headers, token_source)
+            remote_version, artifacts_url = get_latest_run_info(branch, headers)
+            
+            local_version_file = yabridge_dir / ".version"
+            local_version = local_version_file.read_text().strip() if local_version_file.is_file() else ""
 
-    try:
-        branch = select_branch(headers, token_source)
-        remote_version, artifacts_url = get_latest_run_info(branch, headers)
-        local_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
-
-        if remote_version == local_version and yabridgectl_path.exists():
-            print_info(f"Du hast bereits die aktuellste Version ({remote_version}) und die Installation ist intakt.")
-        else:
-            if not yabridgectl_path.exists() and remote_version == local_version:
-                print_info(f"Die Version ({local_version}) ist aktuell, aber die Installation ist beschädigt. Führe Reparatur durch...")
+            if remote_version == local_version and yabridgectl_path.exists():
+                print_info(f"Du hast bereits die aktuellste Version ({remote_version}) und die Installation ist intakt.")
             else:
-                print_info(f"Neue Version gefunden: {remote_version} (installiert: {local_version or 'keine'})")
-            perform_installation(artifacts_url, headers, yabridge_dir, remote_version)
+                if not yabridgectl_path.exists() and remote_version == local_version:
+                    print_info(f"Die Version ({local_version}) ist aktuell, aber die Installation ist beschädigt. Führe Reparatur durch...")
+                else:
+                    print_info(f"Neue Version gefunden: {remote_version} (installiert: {local_version or 'keine'})")
+                perform_installation(artifacts_url, headers, yabridge_dir, remote_version)
 
-        run_sync(yabridgectl_path)
-        check_and_update_path(yabridge_dir)
+            run_sync(yabridgectl_path)
+            check_and_update_path(yabridge_dir)
 
-    except (requests.RequestException, subprocess.SubprocessError, FileNotFoundError, ValueError, IOError, zipfile.BadZipFile, tarfile.TarError) as e:
-        print_error(f"Ein Fehler ist aufgetreten: {e}")
-        sys.exit(1)
+        except (requests.RequestException, subprocess.SubprocessError, FileNotFoundError, ValueError, IOError, zipfile.BadZipFile, tarfile.TarError) as e:
+            print_error(f"Ein Fehler ist aufgetreten: {e}")
+            sys.exit(1)
 
     print_info("Skript erfolgreich beendet.")
 
