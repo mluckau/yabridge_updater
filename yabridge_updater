@@ -437,8 +437,24 @@ def main():
             run_sync(yabridgectl_path)
             check_and_update_path(yabridge_dir)
 
-        except (requests.RequestException, subprocess.SubprocessError, FileNotFoundError, ValueError, IOError, zipfile.BadZipFile, tarfile.TarError) as e:
-            print_error(f"Ein Fehler ist aufgetreten: {e}")
+        except requests.RequestException as e:
+            print_error("Ein Netzwerkfehler bei der Kommunikation mit GitHub ist aufgetreten.")
+            print_error(f"  Details: {e}")
+            sys.exit(1)
+        except subprocess.SubprocessError as e:
+            print_error("Ein externer Befehl (z.B. yabridgectl, secret-tool) ist fehlgeschlagen.")
+            print_error(f"  Details: {e}")
+            sys.exit(1)
+        except (IOError, zipfile.BadZipFile, tarfile.TarError) as e:
+            print_error("Ein Fehler beim Lesen, Schreiben oder Entpacken von Dateien ist aufgetreten.")
+            print_error(f"  Details: {e}")
+            sys.exit(1)
+        except (FileNotFoundError, ValueError) as e:
+            print_error("Ein interner Fehler oder eine unerwartete API-Antwort ist aufgetreten.")
+            print_error(f"  Details: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print_error(f"Ein unerwarteter, allgemeiner Fehler ist aufgetreten: {e}")
             sys.exit(1)
 
     print_info("Skript erfolgreich beendet.")
