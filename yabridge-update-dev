@@ -1,0 +1,375 @@
+#!/bin/bash
+
+# Finale Version: Lädt die neueste Entwicklerversion von yabridge (libs und ctl)
+# aus dem "new-wine10-embedding"-Branch herunter, indem es die GitHub-API mit `jq` analysiert.
+
+# Beendet das Skript sofort, wenn ein Befehl fehlschlägt.
+set -e
+
+# --- Konfiguration ---
+REPO="robbert-vdh/yabridge"
+YABRIDGE_DIR="$HOME/.local/share/yabridge"
+YABRIDGECTL_PATH="$YABRIDGE_DIR/yabridgectl"
+TMP_DIR=$(mktemp -d)
+
+# --- Funktionen ---
+cleanup() {
+  echo "-> Räume temporäres Verzeichnis auf..."
+  rm -rf "$TMP_DIR"
+  echo "-> Fertig."
+}
+
+# --- Hauptskript ---
+trap cleanup EXIT
+
+# --- Argumenten-Verarbeitung für Token-Reset ---
+if [ "$1" == "--update-token" ]; then
+    echo "-> Lösche gespeicherte GitHub-Tokens..."
+    
+    # Versuche, das Token aus dem System-Schlüsselbund zu löschen (mit Verifizierung)
+    if command -v secret-tool &> /dev/null; then
+        if secret-tool lookup service yabridge-updater &>/dev/null; then
+            echo "-> Gespeichertes Token im Schlüsselbund gefunden. Versuche zu löschen..."
+            secret-tool clear service yabridge-updater
+            
+            # Verifiziere die Löschung
+            if secret-tool lookup service yabridge-updater &>/dev/null; then
+                echo "FEHLER: Konnte das Token nicht automatisch aus dem Schlüsselbund löschen."
+                echo "Bitte versuchen Sie, es manuell mit einem Tool wie 'seahorse' (Passwörter und Schlüssel) zu entfernen."
+                echo "Suchen Sie nach einem Eintrag mit dem Namen 'yabridge-updater'."
+            else
+                echo "-> Token erfolgreich aus dem System-Schlüsselbund entfernt."
+            fi
+        else
+            echo "-> Kein Token im System-Schlüsselbund gefunden."
+        fi
+    fi
+    
+    # Versuche, die Fallback-Token-Datei zu löschen
+    CONFIG_DIR="$HOME/.config/yabridge-updater"
+    CONFIG_FILE="$CONFIG_DIR/token"
+    if [ -f "$CONFIG_FILE" ]; then
+        rm "$CONFIG_FILE"
+        echo "-> Verschlüsselte Token-Datei (openssl-Fallback) entfernt."
+    fi
+    
+    echo "-> Token-Löschvorgang abgeschlossen."
+    echo "Beim nächsten normalen Ausführen des Skripts wirst du zur Eingabe eines neuen Tokens aufgefordert (falls keiner mehr gefunden wird)."
+    exit 0
+fi
+
+# 1. Abhängigkeits-Check
+if ! command -v jq &> /dev/null; then
+    echo "FEHLER: 'jq' wird für dieses Skript benötigt, ist aber nicht installiert."
+    echo "Bitte installiere 'jq' und versuche es erneut."
+    echo "Beispiele: sudo apt-get install jq  /  sudo dnf install jq  /  sudo pacman -S jq"
+    exit 1
+fi
+
+# 2. Authentifizierung & Token-Validierung
+CONFIG_DIR="$HOME/.config/yabridge-updater"
+CONFIG_FILE="$CONFIG_DIR/token" # Fallback-Datei für openssl
+VERSION_FILE="$CONFIG_DIR/version"
+AUTH_SUCCESS="false"
+TOKEN_SOURCE=""
+
+# --- Token-Beschaffung mit Prioritäten ---
+# Priorität 1: Eine explizit übergebene Umgebungsvariable.
+if [ -n "$GITHUB_TOKEN" ]; then
+    echo "-> GitHub Token aus der Umgebungsvariable GITHUB_TOKEN verwendet."
+    TOKEN_SOURCE="env"
+# Priorität 2: System-Schlüsselbund.
+elif command -v secret-tool &> /dev/null; then
+    # Fange Fehler von secret-tool ab (z.B. wenn der Keyring-Daemon nicht läuft), damit set -e nicht auslöst.
+    if GITHUB_TOKEN=$(secret-tool lookup service yabridge-updater 2>/dev/null || true); then
+        if [ -n "$GITHUB_TOKEN" ]; then
+            echo "-> GitHub Token aus dem System-Schlüsselbund geladen."
+            TOKEN_SOURCE="keyring"
+        fi
+    fi
+# Priorität 3: Verschlüsselte Datei.
+elif [ -f "$CONFIG_FILE" ]; then
+    echo "-> Verschlüsselte Token-Datei gefunden (openssl-Fallback)."
+    TOKEN_SOURCE="file"
+fi
+
+
+# Wenn nach allen Prüfungen kein Token da ist oder entschlüsselt werden muss.
+if [ -z "$GITHUB_TOKEN" ]; then
+    # Fall 1: Es wurde eine Datei gefunden, die nun entschlüsselt werden muss.
+    if [ "$TOKEN_SOURCE" == "file" ]; then
+        if ! command -v openssl &> /dev/null; then
+            echo "FEHLER: 'openssl' wird zum Entschlüsseln benötigt, ist aber nicht installiert."
+        else
+            read -s -p "Bitte das Passwort zum Entschlüsseln des Tokens eingeben: " DECRYPTION_PASS
+            echo
+            ENCRYPTED_TOKEN=$(cat "$CONFIG_FILE")
+            GITHUB_TOKEN=$(echo "$ENCRYPTED_TOKEN" | openssl enc -aes-256-cbc -a -d -salt -pbkdf2 -pass pass:"$DECRYPTION_PASS" 2>/dev/null)
+            [ -z "$GITHUB_TOKEN" ] && echo "FEHLER: Entschlüsselung fehlgeschlagen."
+        fi
+    fi
+
+    # Fall 2: Immer noch kein Token, also den Benutzer fragen.
+    if [ -z "$GITHUB_TOKEN" ]; then
+        echo "-> GitHub-API-Authentifizierung ist erforderlich."
+        read -s -p "Gib dein GitHub PAT ein: " GITHUB_TOKEN
+        echo
+        if [ -n "$GITHUB_TOKEN" ]; then
+            read -p "Soll das neue Token für die zukünftige Nutzung gespeichert werden? (j/N) " SAVE_TOKEN
+            if [[ "$SAVE_TOKEN" =~ ^[jJ](a)?$ ]]; then
+                if command -v secret-tool &> /dev/null; then
+                    echo -n "$GITHUB_TOKEN" | secret-tool store --label="yabridge-updater GitHub PAT" service yabridge-updater
+                    echo "-> Token wurde sicher im System-Schlüsselbund gespeichert."
+                elif command -v openssl &> /dev/null; then
+                    read -s -p "Bitte ein Passwort zum Verschlüsseln des Tokens eingeben: " ENCRYPTION_PASS
+                    echo
+                    read -s -p "Passwort bestätigen: " ENCRYPTION_PASS_CONFIRM
+                    echo
+                    if [ "$ENCRYPTION_PASS" != "$ENCRYPTION_PASS_CONFIRM" ]; then
+                        echo "FEHLER: Passwörter stimmen nicht überein. Token wird nicht gespeichert."
+                    else
+                        mkdir -p "$CONFIG_DIR"
+                        ENCRYPTED_TOKEN=$(echo "$GITHUB_TOKEN" | openssl enc -aes-256-cbc -a -salt -pbkdf2 -pass pass:"$ENCRYPTION_PASS")
+                        echo "$ENCRYPTED_TOKEN" > "$CONFIG_FILE"
+                        chmod 600 "$CONFIG_FILE"
+                        echo "-> Token wurde verschlüsselt (mit openssl) gespeichert."
+                    fi
+                else
+                    echo "FEHLER: Weder 'secret-tool' noch 'openssl' gefunden. Token kann nicht sicher gespeichert werden."
+                fi
+            fi
+        fi
+    fi
+fi
+
+# FINALE PRÜFUNG: Wenn wir hier immer noch kein Token haben, abbrechen.
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "FEHLER: Kein GitHub Token verfügbar. Abbruch."
+    exit 1
+fi
+
+AUTH_HEADER="Authorization: Bearer $GITHUB_TOKEN"
+
+# 3. Branch-Auswahl (dient gleichzeitig als Token-Validierung)
+echo "-> Lade verfügbare Branches..."
+BRANCHES_JSON=$(curl -s -H "$AUTH_HEADER" -H "Accept: application/vnd.github.v3+json" "https://api.github.com/repos/$REPO/branches")
+
+# Robuste Prüfung, ob die API-Antwort ein valides Array ist.
+if ! echo "$BRANCHES_JSON" | jq -e 'type == "array"' &>/dev/null; then
+    echo "FEHLER: Konnte keine gültige Branch-Liste von GitHub abrufen."
+    echo "Die API-Antwort war kein Array. HÄUFIGSTE URSACHE: Der verwendete Token ist ungültig oder abgelaufen."
+    echo "API-Antwort: $BRANCHES_JSON"
+    
+    echo "-> Versuche, den fehlerhaften Token zu löschen..."
+    if [ "$TOKEN_SOURCE" == "keyring" ]; then
+        secret-tool clear service yabridge-updater || true
+        echo "-> Token aus Schlüsselbund entfernt (falls erfolgreich)."
+    elif [ "$TOKEN_SOURCE" == "file" ]; then
+        rm "$CONFIG_FILE"
+        echo "-> Token-Datei entfernt."
+    fi
+    exit 1
+fi
+
+# Fehlerbehandlung, falls das Array leer ist
+if [ "$(echo "$BRANCHES_JSON" | jq 'length')" -eq 0 ]; then
+    echo "FEHLER: Das Repository '$REPO' hat keine Branches."
+    exit 1
+fi
+
+# Branches in ein Array einlesen
+mapfile -t BRANCH_NAMES < <(echo "$BRANCHES_JSON" | jq -r '.[].name')
+
+echo "Bitte wähle einen Branch aus, von dem installiert werden soll:"
+select branch_choice in "${BRANCH_NAMES[@]}"; do
+    if [[ -n "$branch_choice" ]]; then
+        BRANCH="$branch_choice"
+        echo "-> Du hast Branch '$BRANCH' ausgewählt."
+        break
+    else
+        echo "Ungültige Auswahl. Bitte versuche es erneut."
+    fi
+done
+
+if [ -z "$BRANCH" ]; then
+    echo "FEHLER: Keine Branch ausgewählt. Abbruch."
+    exit 1
+fi
+
+# 4. API-Abfragen & Versions-Check für den ausgewählten Branch
+echo "-> Suche nach dem letzten erfolgreichen Workflow-Lauf für Branch '$BRANCH'..."
+API_URL="https://api.github.com/repos/$REPO/actions/runs?branch=$BRANCH&status=success&per_page=1"
+RUNS_JSON=$(curl -s -H "$AUTH_HEADER" -H "Accept: application/vnd.github.v3+json" "$API_URL")
+
+# Extrahiere Versions-ID und Artefakt-URL
+REMOTE_VERSION=$(echo "$RUNS_JSON" | jq -r '.workflow_runs[0].head_sha')
+ARTIFACTS_URL=$(echo "$RUNS_JSON" | jq -r '.workflow_runs[0].artifacts_url')
+
+
+if [ -z "$REMOTE_VERSION" ] || [ "$REMOTE_VERSION" == "null" ]; then
+    echo "FEHLER: Konnte die Remote-Versions-ID nicht ermitteln."
+    echo "API-Antwort: $RUNS_JSON"
+    exit 1
+fi
+
+# Vergleiche mit lokaler Version
+LOCAL_VERSION=""
+if [ -f "$VERSION_FILE" ]; then
+    LOCAL_VERSION=$(cat "$VERSION_FILE")
+fi
+
+# Prüfe, ob die Installation intakt ist UND die Version aktuell ist.
+if [ "$REMOTE_VERSION" == "$LOCAL_VERSION" ] && [ -f "$YABRIDGECTL_PATH" ]; then
+    echo "-> Du hast bereits die aktuellste Version ($REMOTE_VERSION) und die Installation ist intakt."
+else
+    # Wenn die Versionen abweichen ODER yabridgectl fehlt, führe die Installation/Reparatur durch.
+    if [ ! -f "$YABRIDGECTL_PATH" ] && [ "$REMOTE_VERSION" == "$LOCAL_VERSION" ]; then
+        echo "-> Die Version ($LOCAL_VERSION) ist aktuell, aber die Installation ist beschädigt. Führe Reparatur durch..."
+    else
+        echo "-> Neue Version gefunden: $REMOTE_VERSION (installiert: $LOCAL_VERSION)"
+    fi
+
+    if [ -z "$ARTIFACTS_URL" ] || [ "$ARTIFACTS_URL" == "null" ]; then
+      echo "FEHLER: Konnte die Artefakt-URL nicht finden. Überprüfe Token und Branch-Namen."
+      echo "API-Antwort: $RUNS_JSON"
+      exit 1
+    fi
+
+    echo "-> Rufe Artefakt-Liste ab..."
+    ARTIFACTS_JSON=$(curl -s -H "$AUTH_HEADER" -H "Accept: application/vnd.github.v3+json" "$ARTIFACTS_URL")
+    CTL_URL=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | select(.name | startswith("yabridgectl")) | .archive_download_url')
+    LIBS_URL=$(echo "$ARTIFACTS_JSON" | jq -r '.artifacts[] | select(.name | startswith("yabridge-")) | .archive_download_url')
+
+    if [ -z "$CTL_URL" ] || [ -z "$LIBS_URL" ]; then
+        echo "FEHLER: Konnte nicht beide Artefakt-URLs finden. Haben sich die Namen ('yabridge', 'yabridgectl') geändert?"
+        echo "API-Antwort: $ARTIFACTS_JSON"
+        exit 1
+    fi
+
+    # 4. Downloads
+    echo "-> Lade 'yabridgectl' herunter..."
+    
+    # --- Robuster Download-Mechanismus mit detaillierter Fehleranalyse ---
+    CTL_HEADERS_FILE=$(mktemp)
+    CTL_BODY_FILE=$(mktemp)
+    HTTP_CODE_CTL=$(curl -s -w "%{http_code}" -H "$AUTH_HEADER" -D "$CTL_HEADERS_FILE" -o "$CTL_BODY_FILE" "$CTL_URL")
+
+    if [ "$HTTP_CODE_CTL" -eq 302 ]; then
+        REDIRECT_URL_CTL=$(grep -i "^location:" "$CTL_HEADERS_FILE" | cut -d' ' -f2 | tr -d '\r')
+        if [ -z "$REDIRECT_URL_CTL" ]; then
+            echo "FEHLER: HTTP-Status war 302, aber keine Location-Header gefunden. Header-Inhalt:"
+            cat "$CTL_HEADERS_FILE"
+            exit 1
+        fi
+        curl -L -A "Gemini-Agent" -o "$TMP_DIR/ctl.zip" "$REDIRECT_URL_CTL"
+    else
+        echo "FEHLER: Unerwartete Antwort von GitHub beim Versuch, die Download-URL abzurufen (HTTP-Status: $HTTP_CODE_CTL)."
+        echo "Antwort von GitHub:"
+        cat "$CTL_BODY_FILE"
+        exit 1
+    fi
+    rm "$CTL_HEADERS_FILE" "$CTL_BODY_FILE"
+
+    if ! file "$TMP_DIR/ctl.zip" | grep -q "Zip archive data"; then
+        echo "FEHLER: Heruntergeladene Datei für 'yabridgectl' ist kein gültiges ZIP-Archiv."
+        echo "Antwort von GitHub (falls vorhanden):"
+        cat "$TMP_DIR/ctl.zip"
+        echo
+        exit 1
+    fi
+
+    echo "-> Lade 'yabridge' (libs) herunter..."
+    LIBS_HEADERS_FILE=$(mktemp)
+    LIBS_BODY_FILE=$(mktemp)
+    HTTP_CODE_LIBS=$(curl -s -w "%{http_code}" -H "$AUTH_HEADER" -D "$LIBS_HEADERS_FILE" -o "$LIBS_BODY_FILE" "$LIBS_URL")
+
+    if [ "$HTTP_CODE_LIBS" -eq 302 ]; then
+        REDIRECT_URL_LIBS=$(grep -i "^location:" "$LIBS_HEADERS_FILE" | cut -d' ' -f2 | tr -d '\r')
+        if [ -z "$REDIRECT_URL_LIBS" ]; then
+            echo "FEHLER: HTTP-Status war 302, aber keine Location-Header gefunden. Header-Inhalt:"
+            cat "$LIBS_HEADERS_FILE"
+            exit 1
+        fi
+        curl -L -A "Gemini-Agent" -o "$TMP_DIR/libs.zip" "$REDIRECT_URL_LIBS"
+    else
+        echo "FEHLER: Unerwartete Antwort von GitHub beim Versuch, die Download-URL abzurufen (HTTP-Status: $HTTP_CODE_LIBS)."
+        echo "Antwort von GitHub:"
+        cat "$LIBS_BODY_FILE"
+        exit 1
+    fi
+    rm "$LIBS_HEADERS_FILE" "$LIBS_BODY_FILE"
+
+    if ! file "$TMP_DIR/libs.zip" | grep -q "Zip archive data"; then
+        echo "FEHLER: Heruntergeladene Datei für 'yabridge' ist kein gültiges ZIP-Archiv."
+        echo "Antwort von GitHub (falls vorhanden):"
+        cat "$TMP_DIR/libs.zip"
+        echo
+        exit 1
+    fi
+
+    # 5. Backup & Installation
+    echo "-> Erstelle Backup und installiere..."
+    if [ -d "$YABRIDGE_DIR" ]; then
+      BACKUP_DIR="$HOME/.local/share/yabridge-backup-$(date +%F-%H%M%S)"
+      echo "-> Sichere bestehende Installation nach $BACKUP_DIR"
+      mv "$YABRIDGE_DIR" "$BACKUP_DIR"
+    fi
+    mkdir -p "$YABRIDGE_DIR"
+
+    # Entpacke CTL
+    unzip -o "$TMP_DIR/ctl.zip" -d "$TMP_DIR/ctl_ext"
+    CTL_TAR=$(find "$TMP_DIR/ctl_ext" -name '*.tar.gz')
+    tar -xzvf "$CTL_TAR" -C "$YABRIDGE_DIR" --strip-components=1
+
+    # Entpacke LIBS
+    unzip -o "$TMP_DIR/libs.zip" -d "$TMP_DIR/libs_ext"
+    LIBS_TAR=$(find "$TMP_DIR/libs_ext" -name '*.tar.gz')
+    tar -xzvf "$LIBS_TAR" -C "$YABRIDGE_DIR" --strip-components=1
+    
+    # Lokale Version speichern
+    echo "$REMOTE_VERSION" > "$VERSION_FILE"
+    echo "-> Update auf Version $REMOTE_VERSION abgeschlossen."
+fi
+
+# 6. Sync (wird immer ausgeführt)
+echo "-> Führe 'yabridgectl sync --prune' aus..."
+if [ -f "$YABRIDGECTL_PATH" ]; then
+  "$YABRIDGECTL_PATH" sync --prune
+else
+  echo "FEHLER: yabridgectl wurde nach der Installation nicht gefunden."
+  exit 1
+fi
+
+# --- PATH-Ergänzung ---
+echo "-> Überprüfe und füge den Installationspfad zum PATH hinzu..."
+INSTALL_PATH="$HOME/.local/share/yabridge"
+
+if [[ ":$PATH:" != *":$INSTALL_PATH:"* ]]; then
+    if [ -n "$BASH_VERSION" ]; then
+        # Bash-Shell
+        BASHRC="$HOME/.bashrc"
+        if ! grep -q "export PATH=\"$INSTALL_PATH:\$PATH\"" "$BASHRC" 2>/dev/null; then
+            echo "export PATH=\"$INSTALL_PATH:\$PATH\"" >> "$BASHRC"
+            echo "-> Pfad für Bash in $BASHRC hinzugefügt."
+            echo "Bitte starte dein Terminal neu oder führe 'source $BASHRC' aus."
+        else
+            echo "-> Pfad ist bereits in $BASHRC vorhanden."
+        fi
+    elif [ -n "$FISH_VERSION" ]; then
+        # Fish-Shell
+        FISH_CONFIG="$HOME/.config/fish/config.fish"
+        if ! grep -q "fish_add_path $INSTALL_PATH" "$FISH_CONFIG" 2>/dev/null; then
+            echo "fish_add_path $INSTALL_PATH" >> "$FISH_CONFIG"
+            echo "-> Pfad für Fish in $FISH_CONFIG hinzugefügt."
+            echo "Bitte starte dein Terminal neu oder führe 'source $FISH_CONFIG' aus."
+        else
+            echo "-> Pfad ist bereits in $FISH_CONFIG vorhanden."
+        fi
+    else
+        echo "-> Unbekannte Shell. Bitte füge den Pfad '$INSTALL_PATH' manuell zu deinem PATH hinzu."
+    fi
+else
+    echo "-> Pfad '$INSTALL_PATH' ist bereits im PATH vorhanden."
+fi
+
+echo "-> Skript erfolgreich beendet."
