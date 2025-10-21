@@ -29,6 +29,17 @@ def print_info(message):
     """Prints an informational message."""
     print(f"-> {message}")
 
+def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, length=50, fill='█'):
+    """Call in a loop to create terminal progress bar."""
+    if total == 0:
+        # Avoid division by zero
+        total = 1
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    sys.stdout.write(f'\r{prefix} |{bar}| {percent}% {suffix}')
+    sys.stdout.flush()
+
 def check_command_exists(cmd):
     """Checks if a command exists on the system."""
     return shutil.which(cmd) is not None
@@ -348,11 +359,27 @@ def main():
                 # Download and extract
                 for name, artifact_url in [("ctl", ctl_artifact["archive_download_url"]),( "libs", libs_artifact["archive_download_url"])]:
                     print_info(f"Lade '{name}' herunter...")
-                    dl_response = requests.get(artifact_url, headers=headers, allow_redirects=True)
+                    
+                    # Use streaming download with a progress bar
+                    dl_response = requests.get(artifact_url, headers=headers, allow_redirects=True, stream=True)
                     dl_response.raise_for_status()
 
+                    total_size = int(dl_response.headers.get('content-length', 0))
                     zip_path = tmp_path / f"{name}.zip"
-                    zip_path.write_bytes(dl_response.content)
+                    
+                    downloaded_size = 0
+                    with open(zip_path, 'wb') as f:
+                        if total_size > 0:
+                            print_progress_bar(0, total_size, prefix='Fortschritt:', suffix='Komplett', length=40)
+                        for chunk in dl_response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                            downloaded_size += len(chunk)
+                            if total_size > 0:
+                                print_progress_bar(downloaded_size, total_size, prefix='Fortschritt:', suffix='Komplett', length=40)
+                    
+                    # Print a newline after the progress bar is done
+                    sys.stdout.write('\n')
+                    sys.stdout.flush()
 
                     if not zipfile.is_zipfile(zip_path):
                         print_error(f"Heruntergeladene Datei für '{name}' ist kein gültiges ZIP-Archiv.")
