@@ -2,6 +2,7 @@
 import argparse
 import datetime
 import getpass
+import json
 import os
 import shutil
 import subprocess
@@ -16,8 +17,10 @@ REPO = "robbert-vdh/yabridge"
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "yabridge-updater"
 TOKEN_FILE = CONFIG_DIR / "token"
-VERSION_FILE = CONFIG_DIR / "version" # Legacy, now stored in install dir
 PATH_CONFIG_FILE = CONFIG_DIR / "path"
+
+# --- Global State ---
+_rate_limit_warning_shown = False
 
 # --- Helper Functions ---
 
@@ -41,6 +44,21 @@ def print_progress_bar(iteration, total, prefix='', suffix='', decimals=1, lengt
 def check_command_exists(cmd):
     """Checks if a command exists on the system."""
     return shutil.which(cmd) is not None
+
+def check_rate_limit(response):
+    """Checks GitHub API rate limit and prints a warning if it's low."""
+    global _rate_limit_warning_shown
+    if _rate_limit_warning_shown:
+        return
+
+    if 'X-RateLimit-Remaining' in response.headers:
+        remaining = int(response.headers['X-RateLimit-Remaining'])
+        if remaining < 100:
+            reset_time_unix = int(response.headers['X-RateLimit-Reset'])
+            reset_datetime = datetime.datetime.fromtimestamp(reset_time_unix)
+            print_error(f"Warnung: Nur noch {remaining} GitHub API-Anfragen übrig.")
+            print_error(f"  Das Limit wird zurückgesetzt um: {reset_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+            _rate_limit_warning_shown = True
 
 # --- Token Management ---
 
@@ -136,6 +154,7 @@ def clear_tokens():
 def select_branch(headers, token_source):
     print_info("Lade verfügbare Branches...")
     response = requests.get(f"https://api.github.com/repos/{REPO}/branches", headers=headers)
+    check_rate_limit(response)
     response.raise_for_status()
     branches_json = response.json()
 
@@ -150,6 +169,7 @@ def select_branch(headers, token_source):
         print(f"  - Prüfe Branch '{name}'...")
         url = f"https://api.github.com/repos/{REPO}/actions/runs?branch={name}&status=success&per_page=1"
         run_response = requests.get(url, headers=headers)
+        check_rate_limit(run_response)
         if run_response.status_code == 200 and run_response.json().get("workflow_runs"):
             branches_with_artifacts.append(name)
 
@@ -174,11 +194,12 @@ def get_latest_run_info(branch, headers):
     print_info(f"Suche nach dem letzten erfolgreichen Workflow-Lauf für Branch '{branch}'...")
     url = f"https://api.github.com/repos/{REPO}/actions/runs?branch={branch}&status=success&per_page=1"
     response = requests.get(url, headers=headers)
+    check_rate_limit(response)
     response.raise_for_status()
     runs_json = response.json()
 
     if not runs_json.get("workflow_runs"):
-        print_error("Keine erfolgreichen Workflow-Läufe für diesen Branch gefunden.")
+        print_error(f"Keine erfolgreichen Workflow-Läufe für diesen Branch gefunden.")
         sys.exit(1)
 
     latest_run = runs_json["workflow_runs"][0]
@@ -193,6 +214,7 @@ def get_latest_run_info(branch, headers):
 def download_and_extract(name, url, headers, tmp_path, yabridge_dir):
     print_info(f"Lade '{name}' herunter...")
     dl_response = requests.get(url, headers=headers, allow_redirects=True, stream=True)
+    check_rate_limit(dl_response)
     dl_response.raise_for_status()
 
     total_size = int(dl_response.headers.get('content-length', 0))
@@ -228,11 +250,12 @@ def download_and_extract(name, url, headers, tmp_path, yabridge_dir):
             members = [m for m in [strip_filter(m, '') for m in tar.getmembers()] if m is not None]
             tar.extractall(path=yabridge_dir, members=members)
 
-def perform_installation(artifacts_url, headers, yabridge_dir, remote_version):
+def perform_installation(artifacts_url, headers, yabridge_dir, remote_version, branch_name):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
         print_info("Rufe Artefakt-Liste ab...")
         response = requests.get(artifacts_url, headers=headers)
+        check_rate_limit(response)
         response.raise_for_status()
         artifacts = response.json()["artifacts"]
 
@@ -250,7 +273,8 @@ def perform_installation(artifacts_url, headers, yabridge_dir, remote_version):
         download_and_extract("libs", libs_artifact["archive_download_url"], headers, tmp_path, yabridge_dir)
 
         CONFIG_DIR.mkdir(exist_ok=True)
-        (yabridge_dir / ".version").write_text(remote_version)
+        version_data = {"sha": remote_version, "branch": branch_name}
+        (yabridge_dir / ".version").write_text(json.dumps(version_data, indent=4))
         PATH_CONFIG_FILE.write_text(str(yabridge_dir))
         print_info(f"Update auf Version {remote_version} abgeschlossen.")
         print_info(f"Installationspfad in {PATH_CONFIG_FILE} gespeichert.")
@@ -314,8 +338,13 @@ def restore_from_backup(yabridge_dir):
         version_str = ""
         version_file_in_backup = backup / ".version"
         if version_file_in_backup.is_file():
-            version_sha = version_file_in_backup.read_text().strip()[:7]
-            version_str = f" (Version: {version_sha})"
+            try:
+                version_data = json.loads(version_file_in_backup.read_text())
+                version_sha = version_data.get("sha", "N/A")[:7]
+                version_branch = version_data.get("branch", "N/A")
+                version_str = f" (Version: {version_sha}, Branch: {version_branch})"
+            except json.JSONDecodeError:
+                version_str = " (Ungültige Versionsdatei)"
         date_str = backup.name.replace("yabridge-backup-", "")
         print(f"  {i}) {date_str}{version_str}")
 
@@ -336,10 +365,7 @@ def restore_from_backup(yabridge_dir):
         shutil.move(str(selected_backup), str(yabridge_dir))
         restored_version_file = yabridge_dir / ".version"
         if restored_version_file.is_file():
-            restored_version = restored_version_file.read_text().strip()
-            VERSION_FILE.write_text(restored_version) # Write to legacy central file for now
-            (yabridge_dir / ".version").write_text(restored_version) # Ensure it exists in the new location too
-            print_info(f"Zentrale Versionsdatei auf {restored_version[:7]} aktualisiert.")
+            print_info("Installation inklusive .version-Datei wiederhergestellt.")
         print_info("Wiederherstellung erfolgreich!")
     except OSError as e:
         print_error(f"Wiederherstellung fehlgeschlagen: {e}")
@@ -353,11 +379,12 @@ def handle_arguments():
     parser.add_argument("--install-path", type=Path, default=None, help="Benutzerdefinierter Installationspfad für yabridge. Überschreibt gespeicherte Pfade.")
     subparsers = parser.add_subparsers(dest="command", title="Befehle")
 
-    subparsers.add_parser("update", help="Sucht nach Updates und installiert sie (Standardaktion)." )
+    update_parser = subparsers.add_parser("update", help="Sucht nach Updates und installiert sie (Standardaktion).")
+    update_parser.add_argument("--interactive", action="store_true", help="Erzwingt die interaktive Auswahl eines Branches.")
     subparsers.add_parser("status", help="Zeigt die aktuell installierte Version und den Pfad an.")
     subparsers.add_parser("restore", help="Stellt eine frühere Version aus einem Backup wieder her.")
     prune_parser = subparsers.add_parser("prune-backups", help="Löscht alte Backups.")
-    prune_parser.add_argument("keep", type=int, nargs="?", default=5, help="Anzahl der zu behaltenden Backups (Standard: 5)." )
+    prune_parser.add_argument("keep", type=int, nargs="?", default=5, help="Anzahl der zu behaltenden Backups (Standard: 5).")
     token_parser = subparsers.add_parser("token", help="Verwaltet den gespeicherten GitHub-Token.")
     token_parser.add_argument("--clear", action="store_true", help="Löscht den gespeicherten GitHub-Token.")
     return parser.parse_args()
@@ -389,10 +416,13 @@ def main():
         else: print(f"  yabridgectl gefunden: Nein (Installation ist beschädigt oder nicht vorhanden)")
         version_file_in_install = yabridge_dir / ".version"
         if version_file_in_install.is_file():
-            print(f"  Installierte Version (SHA): {version_file_in_install.read_text().strip()}")
-        elif VERSION_FILE.exists():
-             print(f"  Installierte Version (SHA): {VERSION_FILE.read_text().strip()} (aus zentraler Konfig)")
-        else: print("  Installierte Version (SHA): Unbekannt (keine Versionsdatei gefunden)")
+            try:
+                version_data = json.loads(version_file_in_install.read_text())
+                print(f"  Installierter Branch: {version_data.get('branch', 'N/A')}")
+                print(f"  Installierte Version (SHA): {version_data.get('sha', 'N/A')}")
+            except json.JSONDecodeError:
+                print("  Version: Fehler beim Lesen der .version-Datei.")
+        else: print("  Version: Unbekannt (keine .version-Datei gefunden)")
         sys.exit(0)
 
     if command == 'restore':
@@ -419,42 +449,46 @@ def main():
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.v3+json"}
 
         try:
-            branch = select_branch(headers, token_source)
-            remote_version, artifacts_url = get_latest_run_info(branch, headers)
-            
-            local_version_file = yabridge_dir / ".version"
-            local_version = local_version_file.read_text().strip() if local_version_file.is_file() else ""
+            # Automatic update check logic
+            version_file_in_install = yabridge_dir / ".version"
+            local_info = None
+            is_interactive = getattr(args, 'interactive', False)
 
-            if remote_version == local_version and yabridgectl_path.exists():
-                print_info(f"Du hast bereits die aktuellste Version ({remote_version}) und die Installation ist intakt.")
-            else:
-                if not yabridgectl_path.exists() and remote_version == local_version:
-                    print_info(f"Die Version ({local_version}) ist aktuell, aber die Installation ist beschädigt. Führe Reparatur durch...")
+            if is_interactive:
+                 print_info("Interaktiver Modus erzwingen.")
+            elif version_file_in_install.is_file():
+                try: local_info = json.loads(version_file_in_install.read_text())
+                except json.JSONDecodeError:
+                    print_error("Lokale .version-Datei ist korrupt. Wechsle in den interaktiven Modus.")
+                    is_interactive = True
+
+            if not is_interactive and local_info and local_info.get("branch") and local_info.get("sha"):
+                local_branch = local_info["branch"]
+                local_sha = local_info["sha"]
+                print_info(f"Prüfe auf Updates für den installierten Branch '{local_branch}'...")
+                remote_sha, artifacts_url = get_latest_run_info(local_branch, headers)
+                
+                if remote_sha != local_sha:
+                    print_info(f"Update von {local_sha[:7]} auf {remote_sha[:7]} für Branch '{local_branch}' verfügbar.")
+                    if input("Jetzt installieren? (J/n) ").lower().strip() in ["", "j", "ja"]:
+                        perform_installation(artifacts_url, headers, yabridge_dir, remote_sha, local_branch)
+                        run_sync(yabridgectl_path)
+                        check_and_update_path(yabridge_dir)
+                    else:
+                        print_info("Update abgebrochen.")
                 else:
-                    print_info(f"Neue Version gefunden: {remote_version} (installiert: {local_version or 'keine'})")
-                perform_installation(artifacts_url, headers, yabridge_dir, remote_version)
+                    print_info("Du hast bereits die aktuellste Version.")
+            else:
+                # Fallback to interactive mode
+                print_info("Keine lokale Version gefunden oder --interactive gesetzt. Starte interaktiven Modus...")
+                branch = select_branch(headers, token_source)
+                remote_version, artifacts_url = get_latest_run_info(branch, headers)
+                perform_installation(artifacts_url, headers, yabridge_dir, remote_version, branch)
+                run_sync(yabridgectl_path)
+                check_and_update_path(yabridge_dir)
 
-            run_sync(yabridgectl_path)
-            check_and_update_path(yabridge_dir)
-
-        except requests.RequestException as e:
-            print_error("Ein Netzwerkfehler bei der Kommunikation mit GitHub ist aufgetreten.")
-            print_error(f"  Details: {e}")
-            sys.exit(1)
-        except subprocess.SubprocessError as e:
-            print_error("Ein externer Befehl (z.B. yabridgectl, secret-tool) ist fehlgeschlagen.")
-            print_error(f"  Details: {e}")
-            sys.exit(1)
-        except (IOError, zipfile.BadZipFile, tarfile.TarError) as e:
-            print_error("Ein Fehler beim Lesen, Schreiben oder Entpacken von Dateien ist aufgetreten.")
-            print_error(f"  Details: {e}")
-            sys.exit(1)
-        except (FileNotFoundError, ValueError) as e:
-            print_error("Ein interner Fehler oder eine unerwartete API-Antwort ist aufgetreten.")
-            print_error(f"  Details: {e}")
-            sys.exit(1)
-        except Exception as e:
-            print_error(f"Ein unerwarteter, allgemeiner Fehler ist aufgetreten: {e}")
+        except (requests.RequestException, subprocess.SubprocessError, FileNotFoundError, ValueError, IOError, zipfile.BadZipFile, tarfile.TarError) as e:
+            print_error(f"Ein Fehler ist aufgetreten: {e}")
             sys.exit(1)
 
     print_info("Skript erfolgreich beendet.")
