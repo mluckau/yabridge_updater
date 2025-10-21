@@ -133,8 +133,7 @@ def select_branch(headers, token_source):
 
     if not isinstance(branches_json, list) or not branches_json:
         print_error(f"Konnte keine gültige Branch-Liste von GitHub abrufen. Der Token ist möglicherweise ungültig. API-Antwort: {response.text}")
-        if token_source in ["keyring", "file"]:
-            clear_tokens()
+        if token_source in ["keyring", "file"]: clear_tokens()
         sys.exit(1)
 
     print_info("Prüfe Branches auf verfügbare Artefakte...")
@@ -276,10 +275,28 @@ def check_and_update_path(yabridge_dir):
     elif config_file: print_info(f"Pfad ist bereits in {config_file} vorhanden.")
     else: print_info(f"Unbekannte Shell '{shell_name}'. Bitte füge den Pfad '{install_path_str}' manuell zu deinem PATH hinzu.")
 
+def prune_backups(backup_parent_dir, keep_count):
+    print_info(f"Räume Backups auf, behalte die letzten {keep_count}...")
+    backups = sorted([d for d in backup_parent_dir.glob("yabridge-backup-*") if d.is_dir()], key=lambda d: d.name, reverse=True)
+
+    if len(backups) <= keep_count:
+        print_info("Nicht genügend alte Backups zum Aufräumen gefunden.")
+        return
+
+    to_delete = backups[keep_count:]
+    print_info(f"Lösche {len(to_delete)} alte Backup(s)...")
+    for backup_dir in to_delete:
+        try:
+            shutil.rmtree(backup_dir)
+            print(f"  - {backup_dir.name} gelöscht.")
+        except OSError as e:
+            print_error(f"Konnte Backup {backup_dir} nicht löschen: {e}")
+
 def handle_arguments():
     parser = argparse.ArgumentParser(description="Lädt die neueste Entwicklerversion von yabridge herunter.", formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("--update-token", action="store_true", help="Gespeicherte GitHub-Tokens löschen und neu eingeben.")
     parser.add_argument("--install-path", type=Path, default=None, help="Benutzerdefinierter Installationspfad für yabridge.\nStandard: ~/.local/share/yabridge")
+    parser.add_argument("--prune-backups", type=int, nargs='?', const=5, default=None, metavar='N', help="Lösche alte Backups und behalte nur die letzten N.\nStandard, wenn Flag gesetzt ist: 5.")
     return parser.parse_args()
 
 def determine_install_path(args):
@@ -328,6 +345,9 @@ def main():
 
         run_sync(yabridgectl_path)
         check_and_update_path(yabridge_dir)
+
+        if args.prune_backups is not None:
+            prune_backups(yabridge_dir.parent, args.prune_backups)
 
     except (requests.RequestException, subprocess.SubprocessError, FileNotFoundError, ValueError, IOError, zipfile.BadZipFile, tarfile.TarError) as e:
         print_error(f"Ein Fehler ist aufgetreten: {e}")
