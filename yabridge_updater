@@ -285,7 +285,7 @@ def run_sync(yabridgectl_path):
     print_header("Synchronisiere Plugins")
     print_info(f"Führe '{C.OKCYAN}{yabridgectl_path} sync --prune{C.ENDC}' aus...")
     if not yabridgectl_path.exists(): raise FileNotFoundError("yabridgectl wurde nach der Installation nicht gefunden.")
-    subprocess.run([str(yabridgectl_path), "sync", "--prune"], check=True, capture_output=True)
+    subprocess.run([str(yabridgectl_path), "sync", "--prune"], check=True)
 
 def check_and_update_path(yabridge_dir):
     print_header("PATH-Überprüfung")
