@@ -16,11 +16,10 @@ from pathlib import Path
 # --- Configuration ---
 REPO = "robbert-vdh/yabridge"
 HOME = Path.home()
-YABRIDGE_DIR = HOME / ".local" / "share" / "yabridge"
-YABRIDGECTL_PATH = YABRIDGE_DIR / "yabridgectl"
 CONFIG_DIR = HOME / ".config" / "yabridge-updater"
 TOKEN_FILE = CONFIG_DIR / "token"
 VERSION_FILE = CONFIG_DIR / "version"
+PATH_CONFIG_FILE = CONFIG_DIR / "path"
 
 def print_error(message):
     """Prints an error message to stderr."""
@@ -123,7 +122,6 @@ def save_token_to_file(token):
     except (subprocess.SubprocessError, FileNotFoundError):
         print_error("Verschlüsselung mit openssl fehlgeschlagen. Token nicht gespeichert.")
 
-
 def get_token():
     """Gets the GitHub token from env, keyring, or file, or prompts the user."""
     # 1. Environment variable
@@ -187,9 +185,42 @@ def clear_tokens():
 
 def main():
     """Main script logic."""
-    parser = argparse.ArgumentParser(description="Lädt die neueste Entwicklerversion von yabridge herunter.")
-    parser.add_argument("--update-token", action="store_true", help="Gespeicherte GitHub-Tokens löschen und neu eingeben.")
+    parser = argparse.ArgumentParser(
+        description="Lädt die neueste Entwicklerversion von yabridge herunter.",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        "--update-token",
+        action="store_true",
+        help="Gespeicherte GitHub-Tokens löschen und neu eingeben."
+    )
+    parser.add_argument(
+        "--install-path",
+        type=Path,
+        default=None,
+        help="Benutzerdefinierter Installationspfad für yabridge.\nStandard: ~/.local/share/yabridge"
+    )
     args = parser.parse_args()
+
+    # --- Determine installation path ---
+    # Priority: 1. CLI argument, 2. Saved path config, 3. Hardcoded default
+    yabridge_dir = None
+    hardcoded_default_path = HOME / ".local" / "share" / "yabridge"
+
+    if args.install_path:
+        yabridge_dir = args.install_path.resolve()
+        print_info(f"Verwende benutzerdefinierten Installationspfad (via Parameter): {yabridge_dir}")
+    elif PATH_CONFIG_FILE.exists():
+        saved_path_str = PATH_CONFIG_FILE.read_text().strip()
+        if saved_path_str:
+            yabridge_dir = Path(saved_path_str).resolve()
+            print_info(f"Verwende gespeicherten Installationspfad: {yabridge_dir}")
+    
+    if not yabridge_dir:
+        yabridge_dir = hardcoded_default_path
+        print_info(f"Verwende Standard-Installationspfad: {yabridge_dir}")
+
+    yabridgectl_path = yabridge_dir / "yabridgectl"
 
     if args.update_token:
         clear_tokens()
@@ -282,10 +313,10 @@ def main():
     # --- 4. Version Check and Installation ---
     local_version = VERSION_FILE.read_text().strip() if VERSION_FILE.exists() else ""
 
-    if remote_version == local_version and YABRIDGECTL_PATH.exists():
+    if remote_version == local_version and yabridgectl_path.exists():
         print_info(f"Du hast bereits die aktuellste Version ({remote_version}) und die Installation ist intakt.")
     else:
-        if not YABRIDGECTL_PATH.exists() and remote_version == local_version:
+        if not yabridgectl_path.exists() and remote_version == local_version:
             print_info(f"Die Version ({local_version}) ist aktuell, aber die Installation ist beschädigt. Führe Reparatur durch...")
         else:
             print_info(f"Neue Version gefunden: {remote_version} (installiert: {local_version or 'keine'})")
@@ -306,10 +337,17 @@ def main():
                     print_error("Konnte nicht beide Artefakt-URLs finden.")
                     sys.exit(1)
 
+                # Backup existing installation BEFORE extraction
+                if yabridge_dir.exists():
+                    backup_dir = yabridge_dir.parent / f"yabridge-backup-{datetime.datetime.now().strftime('%F-%H%M%S')}"
+                    print_info(f"Sichere bestehende Installation nach {backup_dir}")
+                    shutil.move(str(yabridge_dir), str(backup_dir))
+
+                yabridge_dir.mkdir(parents=True, exist_ok=True)
+
                 # Download and extract
-                for name, artifact_url in [("ctl", ctl_artifact["archive_download_url"]), ("libs", libs_artifact["archive_download_url"])]:
+                for name, artifact_url in [("ctl", ctl_artifact["archive_download_url"]),( "libs", libs_artifact["archive_download_url"])]:
                     print_info(f"Lade '{name}' herunter...")
-                    # GitHub artifact URLs require following a redirect
                     dl_response = requests.get(artifact_url, headers=headers, allow_redirects=True)
                     dl_response.raise_for_status()
 
@@ -324,70 +362,70 @@ def main():
                     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                         zip_ref.extractall(extract_dir)
 
-                    # The zip contains a tar.gz, find and extract it
                     tar_path = next(extract_dir.glob('*.tar.gz'), None)
                     if not tar_path:
                         print_error(f"Kein .tar.gz-Archiv im '{name}'-Download gefunden.")
                         sys.exit(1)
 
                     with tarfile.open(tar_path, "r:gz") as tar:
-                        # Use a filter to strip the top-level directory
-                        def strip_top_level(tarinfo):
-                            tarinfo.name = '/'.join(tarinfo.name.split('/')[1:])
-                            return tarinfo
-                        tar.extractall(path=YABRIDGE_DIR, members=[m for m in tar.getmembers() if m.name], filter=strip_top_level)
+                        # This filter function strips the top-level directory from the archive members
+                        # and is the recommended way to extract to avoid security issues and
+                        # deprecation warnings in modern Python versions.
+                        def strip_top_level_filter(member, path):
+                            try:
+                                new_path_parts = Path(member.name).parts[1:]
+                                if not new_path_parts:
+                                    return None  # Skip the top-level directory itself
+                                member.name = str(Path(*new_path_parts))
+                            except IndexError:
+                                return None # Skip if path is somehow empty
+                            return member
 
+                        # The 'filter' argument was added in Python 3.12
+                        if sys.version_info >= (3, 12):
+                            tar.extractall(path=yabridge_dir, filter=strip_top_level_filter)
+                        else:
+                            # Fallback for older Python versions
+                            members = []
+                            for member in tar.getmembers():
+                                try:
+                                    new_path_parts = Path(member.name).parts[1:]
+                                    if not new_path_parts:
+                                        continue
+                                    member.name = str(Path(*new_path_parts))
+                                    members.append(member)
+                                except IndexError:
+                                    continue
+                            tar.extractall(path=yabridge_dir, members=members)
 
-                # Backup and install
-                if YABRIDGE_DIR.exists():
-                    backup_dir = HOME / ".local" / "share" / f"yabridge-backup-{datetime.datetime.now().strftime('%F-%H%M%S')}"
-                    print_info(f"Sichere bestehende Installation nach {backup_dir}")
-                    shutil.move(str(YABRIDGE_DIR), str(backup_dir))
-
-                YABRIDGE_DIR.mkdir(exist_ok=True)
-
-                # Re-run extraction to the now empty directory
-                for name in ["ctl", "libs"]:
-                    extract_dir = tmp_path / f"{name}_ext"
-                    tar_path = next(extract_dir.glob('*.tar.gz'))
-                    with tarfile.open(tar_path, "r:gz") as tar:
-                         def strip_top_level(tarinfo):
-                            # Ensure the member path is not empty after stripping
-                            parts = tarinfo.name.split('/')[1:]
-                            if not parts: return None
-                            tarinfo.name = '/'.join(parts)
-                            return tarinfo
-                         # Filter out None values from the map
-                         members_to_extract = [m for m in [strip_top_level(ti) for ti in tar.getmembers()] if m is not None and m.name]
-                         tar.extractall(path=YABRIDGE_DIR, members=members_to_extract)
-
-
-                # Save new version
+                # Save new version and path for next run
                 CONFIG_DIR.mkdir(exist_ok=True)
                 VERSION_FILE.write_text(remote_version)
+                PATH_CONFIG_FILE.write_text(str(yabridge_dir))
                 print_info(f"Update auf Version {remote_version} abgeschlossen.")
+                print_info(f"Installationspfad in {PATH_CONFIG_FILE} gespeichert.")
 
             except requests.RequestException as e:
                 print_error(f"Download-Fehler: {e}")
                 sys.exit(1)
-            except (zipfile.BadZipFile, tarfile.TarError) as e:
-                print_error(f"Fehler beim Entpacken des Archivs: {e}")
+            except (zipfile.BadZipFile, tarfile.TarError, IOError) as e:
+                print_error(f"Fehler bei Installation oder Speichern: {e}")
                 sys.exit(1)
 
     # --- 5. Sync ---
-    print_info("Führe 'yabridgectl sync --prune' aus...")
-    if not YABRIDGECTL_PATH.exists():
+    print_info(f"Führe 'yabridgectl sync --prune' aus...")
+    if not yabridgectl_path.exists():
         print_error("yabridgectl wurde nach der Installation nicht gefunden.")
         sys.exit(1)
     try:
-        subprocess.run([str(YABRIDGECTL_PATH), "sync", "--prune"], check=True)
+        subprocess.run([str(yabridgectl_path), "sync", "--prune"], check=True)
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         print_error(f"Ausführen von yabridgectl fehlgeschlagen: {e}")
         sys.exit(1)
 
     # --- 6. PATH Check ---
     print_info("Überprüfe und füge den Installationspfad zum PATH hinzu...")
-    install_path_str = str(YABRIDGE_DIR)
+    install_path_str = str(yabridge_dir)
     current_path = os.environ.get("PATH", "")
     if install_path_str not in current_path.split(os.pathsep):
         shell_name = os.environ.get("SHELL", "").split("/")[-1]
