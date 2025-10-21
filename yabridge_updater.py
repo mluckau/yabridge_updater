@@ -297,6 +297,7 @@ def handle_arguments():
     parser.add_argument("--update-token", action="store_true", help="Gespeicherte GitHub-Tokens löschen und neu eingeben.")
     parser.add_argument("--install-path", type=Path, default=None, help="Benutzerdefinierter Installationspfad für yabridge.\nStandard: ~/.local/share/yabridge")
     parser.add_argument("--prune-backups", type=int, nargs='?', const=5, default=None, metavar='N', help="Lösche alte Backups und behalte nur die letzten N.\nStandard, wenn Flag gesetzt ist: 5.")
+    parser.add_argument("--status", action="store_true", help="Zeigt die aktuell installierte Version und den Pfad an, ohne ein Update auszuführen.")
     return parser.parse_args()
 
 def determine_install_path(args):
@@ -317,6 +318,20 @@ def main():
     """Main script logic."""
     args = handle_arguments()
     yabridge_dir, yabridgectl_path = determine_install_path(args)
+
+    if args.status:
+        print_info("Status der yabridge-Installation:")
+        print(f"  Installationspfad: {yabridge_dir}")
+        if yabridgectl_path.exists():
+            print(f"  yabridgectl gefunden: Ja")
+        else:
+            print(f"  yabridgectl gefunden: Nein (Installation ist beschädigt oder nicht vorhanden)")
+        if VERSION_FILE.exists():
+            local_version = VERSION_FILE.read_text().strip()
+            print(f"  Installierte Version (SHA): {local_version}")
+        else:
+            print("  Installierte Version (SHA): Unbekannt (keine Versionsdatei gefunden)")
+        sys.exit(0)
 
     if args.update_token: 
         clear_tokens()
