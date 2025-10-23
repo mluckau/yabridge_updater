@@ -61,26 +61,37 @@ main() {
     # 4. Interaktiv weitere Daten löschen
     if [ -n "$USER_HOME" ]; then
         CONFIG_DIR="$USER_HOME/.config/yabridge-updater"
-        YABRIDGE_DEFAULT_DIR="$USER_HOME/.local/share/yabridge"
-        BACKUP_DEFAULT_DIR="$USER_HOME/.local/share/yabridge-backups"
+        PATH_CONFIG_FILE="$CONFIG_DIR/path"
+
+        # Installationspfad ermitteln (benutzerdefiniert oder Standard)
+        if [ -f "$PATH_CONFIG_FILE" ] && [ -s "$PATH_CONFIG_FILE" ]; then
+            YABRIDGE_INSTALL_DIR=$(cat "$PATH_CONFIG_FILE")
+            info "Benutzerdefinierter Installationspfad gefunden: $YABRIDGE_INSTALL_DIR"
+        else
+            YABRIDGE_INSTALL_DIR="$USER_HOME/.local/share/yabridge"
+        fi
+
+        # Backup-Pfad ableiten
+        YABRIDGE_PARENT_DIR=$(dirname "$YABRIDGE_INSTALL_DIR")
+        BACKUP_DIR="$YABRIDGE_PARENT_DIR/yabridge-backups"
 
         echo
         if [ -d "$CONFIG_DIR" ]; then
-            read -p "$(echo -e "${C_YELLOW}Sollen die Konfigurationsdateien (inkl. Token) in '$CONFIG_DIR' gelöscht werden? (j/N) ${C_RESET}")" -r
-            if [[ $REPLY =~ ^[JjYy]$ ]]; then
+            read -p "$(echo -e "${C_YELLOW}Sollen die Konfigurationsdateien in '$CONFIG_DIR' gelöscht werden? (j/N) ${C_RESET}")" -r
+            if [[ $REPLY =~ ^[JjYy]([Aa][Ss])?$ ]]; then
                 info "Lösche Konfigurationsverzeichnis..."
                 rm -rf "$CONFIG_DIR"
                 success "Konfiguration gelöscht."
             fi
         fi
 
-        read -p "$(echo -e "${C_YELLOW}Sollen die yabridge-Installation und die Backups gelöscht werden? (Dies kann nicht rückgängig gemacht werden!) (j/N) ${C_RESET}")" -r
-        if [[ $REPLY =~ ^[JjYy]$ ]]; then
-            info "Lösche yabridge-Installations- und Backup-Verzeichnisse..."
-            # Hinweis: Dies löscht nur die Standardpfade. Benutzerdefinierte Pfade müssen manuell gelöscht werden.
-            rm -rf "$YABRIDGE_DEFAULT_DIR" "$BACKUP_DEFAULT_DIR"
-            success "yabridge-Daten gelöscht."
-            warning "Falls du einen benutzerdefinierten Pfad verwendet hast, musst du diesen manuell löschen."
+        if [ -d "$YABRIDGE_INSTALL_DIR" ] || [ -d "$BACKUP_DIR" ]; then
+            read -p "$(echo -e "${C_YELLOW}Sollen die yabridge-Installation ('$YABRIDGE_INSTALL_DIR') und die Backups ('$BACKUP_DIR') gelöscht werden? (j/N) ${C_RESET}")" -r
+            if [[ $REPLY =~ ^[JjYy]([Aa][Ss])?$ ]]; then
+                info "Lösche yabridge-Installations- und Backup-Verzeichnisse..."
+                rm -rf "$YABRIDGE_INSTALL_DIR" "$BACKUP_DIR"
+                success "yabridge-Daten gelöscht."
+            fi
         fi
     fi
 
