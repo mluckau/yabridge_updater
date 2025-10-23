@@ -53,7 +53,7 @@ Das Installationsskript kümmert sich um den Rest, einschließlich `python3`, `w
 
 1.  **Repository klonen:**
     ```bash
-    git clone https://github.com/your-username/yabridge-updater.git
+    git clone https://github.com/mluckau/yabridge_updater.git
     cd yabridge-updater
     ```
 
@@ -145,7 +145,7 @@ The installation script takes care of the rest, including `python3`, `wine`, `op
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/yabridge-updater.git
+    git clone https://github.com/mluckau/yabridge_updater.git
     cd yabridge-updater
     ```
 
