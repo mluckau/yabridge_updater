@@ -15,6 +15,7 @@ A command-line tool to easily download, install, and manage development builds o
   - [🇩🇪 Deutsche Dokumentation](#-deutsche-dokumentation)
     - [Features](#features)
     - [Voraussetzungen](#voraussetzungen)
+    - [Wichtiger Hinweis: Bestehende Installationen entfernen](#wichtiger-hinweis-bestehende-installationen-entfernen)
     - [Installation](#installation)
     - [Benutzung (Befehle)](#benutzung-befehle)
     - [GitHub Personal Access Token (PAT)](#github-personal-access-token-pat)
@@ -22,6 +23,7 @@ A command-line tool to easily download, install, and manage development builds o
   - [🇬🇧 English Documentation](#-english-documentation)
     - [Features](#features-1)
     - [Prerequisites](#prerequisites)
+    - [Important Note: Remove Existing Installations](#important-note-remove-existing-installations)
     - [Installation](#installation-1)
     - [Usage (Commands)](#usage-commands)
     - [GitHub Personal Access Token (PAT)](#github-personal-access-token-pat-1)
@@ -48,6 +50,22 @@ A command-line tool to easily download, install, and manage development builds o
 *   `sudo`-Rechte für die Installation.
 
 Das Installationsskript kümmert sich um den Rest, einschließlich `python3`, `wine`, `openssl` etc.
+
+### Wichtiger Hinweis: Bestehende Installationen entfernen
+
+Bevor du dieses Skript verwendest, **musst du unbedingt** jede bestehende `yabridge`-Version deinstallieren, die du über den Paketmanager deiner Distribution (z.B. aus den offiziellen Repositories) installiert hast. Andernfalls kann es zu Konflikten zwischen den beiden Versionen kommen.
+
+Beispiele zum Entfernen:
+```bash
+# Für Debian/Ubuntu
+sudo apt remove yabridge
+
+# Für Arch Linux
+sudo pacman -R yabridge
+
+# Für Fedora
+sudo dnf remove yabridge
+```
 
 ### Installation
 
@@ -140,6 +158,22 @@ Das Skript wird dich bei der ersten Ausführung nach diesem Token fragen.
 *   `sudo` privileges for the installation.
 
 The installation script takes care of the rest, including `python3`, `wine`, `openssl`, etc.
+
+### Important Note: Remove Existing Installations
+
+Before using this script, you **must** uninstall any existing version of `yabridge` that you installed through your distribution's package manager (e.g., from the official repositories). Failure to do so can lead to conflicts between the two versions.
+
+Examples for removal:
+```bash
+# For Debian/Ubuntu
+sudo apt remove yabridge
+
+# For Arch Linux
+sudo pacman -R yabridge
+
+# For Fedora
+sudo dnf remove yabridge
+```
 
 ### Installation
 
