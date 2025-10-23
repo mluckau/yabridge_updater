@@ -100,7 +100,21 @@ main() {
     echo
     success "Installation abgeschlossen!"
     info "Du kannst das Skript jetzt von überall mit dem Befehl '$INSTALL_NAME' ausführen."
-    info "Beispiel: '$INSTALL_NAME update' oder einfach nur '$INSTALL_NAME'"
+
+    # 7. Den Updater zum ersten Mal ausführen (als der ursprüngliche Benutzer)
+    info "Führe den Updater zum ersten Mal aus, um yabridge zu installieren..."
+    if [ -z "$SUDO_USER" ]; then
+        warning "Konnte den ursprünglichen Benutzer nicht ermitteln. Bitte führe den Updater manuell aus:"
+        warning "  $INSTALL_NAME"
+        exit 0
+    fi
+
+    if [ -n "$1" ]; then
+        info "Verwende benutzerdefinierten Pfad: $1"
+        sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME" --install-path "$1"
+    else
+        sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME"
+    fi
 }
 
 # Skriptausführung starten
