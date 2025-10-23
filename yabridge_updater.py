@@ -23,7 +23,8 @@ PATH_CONFIG_FILE = CONFIG_DIR / "path"
 # --- Internationalization (i18n) ---
 LANG = 'de'  # Default to German
 try:
-    lang_code, _ = locale.getdefaultlocale()
+    locale.setlocale(locale.LC_ALL, '')
+    lang_code, _ = locale.getlocale()
     if not (lang_code and lang_code.lower().startswith('de')):
         LANG = 'en'
 except Exception:
