@@ -143,6 +143,7 @@ TRANSLATIONS = {
     "argparse_commands_title": {"de": "Befehle", "en": "Commands"},
     "argparse_update_help": {"de": "Sucht nach Updates und installiert sie (Standardaktion).", "en": "Checks for updates and installs them (default action)."},
     "argparse_interactive_help": {"de": "Erzwingt die interaktive Auswahl eines Branches.", "en": "Forces interactive branch selection."},
+    "argparse_sync_help": {"de": "Führt 'yabridgectl sync' aus, um Plugins zu synchronisieren.", "en": "Runs 'yabridgectl sync' to synchronize plugins."},
     "argparse_status_help": {"de": "Zeigt die aktuell installierte Version und den Pfad an.", "en": "Displays the currently installed version and path."},
     "argparse_restore_help": {"de": "Stellt eine frühere Version aus einem Backup wieder her.", "en": "Restores a previous version from a backup."},
     "argparse_prune_help": {"de": "Löscht alte Backups.", "en": "Deletes old backups."},
@@ -672,6 +673,8 @@ def handle_arguments():
     update_parser.add_argument("--interactive", action="store_true",
                                help=get_string("argparse_interactive_help"))
     subparsers.add_parser(
+        "sync", help=get_string("argparse_sync_help"))
+    subparsers.add_parser(
         "status", help=get_string("argparse_status_help"))
     subparsers.add_parser(
         "restore", help=get_string("argparse_restore_help"))
@@ -733,7 +736,11 @@ def main():
                     print_error(get_string("status_version_corrupt"))
             else:
                 print(
-                    f"  Version: {C.WARNING}{get_string('status_unknown_version')}{C.ENDC}")
+                    f"{get_string('status_installed_version')}{C.WARNING}{get_string('status_unknown_version')}{C.ENDC}")
+            sys.exit(0)
+
+        if command == 'sync':
+            run_sync(yabridgectl_path)
             sys.exit(0)
 
         if command == 'restore':
