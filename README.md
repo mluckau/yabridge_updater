@@ -11,8 +11,9 @@ This is a command-line tool to easily download, install, and manage development 
 
 ## Features
 
-- **Update Management**: Automatically checks if a newer version of your currently installed yabridge branch is available and prompts for installation.
-- **Interactive Installation**: If no version is installed or forced via `--interactive`, it presents a list of all available branches with successful builds to choose from.
+- **Flexible Version Management**: Manages both the latest **stable releases** and **development builds** from any branch.
+- **Update Management**: Automatically checks if a newer version of your currently installed yabridge version (stable or development branch) is available.
+- **Interactive Installation**: If no version is installed or forced via `--interactive`, it presents a list of all available branches *and the latest stable release* to choose from.
 - **Secure Token Management**: Securely stores your GitHub Personal Access Token (PAT) using the system's keyring (`secret-tool`) or an `openssl`-encrypted file as a fallback.
 - **Automatic Backups**: Creates a backup of your current yabridge installation before every update or restore.
 - **Backup Management**:
@@ -61,7 +62,7 @@ On the first run, the script will ask for a **GitHub Personal Access Token (PAT)
 
 ### Commands
 
-- **`update` (default)**: Checks for an update for the currently installed branch. If no version is installed, it starts the interactive mode.
+- **`update` (default)**: Checks for an update for the currently installed version (stable or development branch). If no version is installed, it starts the interactive mode.
   - `--interactive`: Forces the interactive mode to select and install a different branch.
 - **`sync`**: Manually runs `yabridgectl sync --prune` to synchronize your VST plugins.
 - **`status`**: Displays information about the current installation (path, version, branch).
@@ -95,8 +96,9 @@ The script will:
 
 ## Features
 
-- **Update-Management**: Prüft automatisch, ob eine neuere Version des aktuell installierten yabridge-Branches verfügbar ist, und fragt nach der Installation.
-- **Interaktive Installation**: Wenn keine Version installiert ist oder `--interactive` erzwungen wird, zeigt das Skript eine Liste aller verfügbaren Branches mit erfolgreichen Builds zur Auswahl an.
+- **Flexibles Versions-Management**: Verwaltet sowohl die neuesten **stabilen Releases** als auch **Entwickler-Builds** von beliebigen Branches.
+- **Update-Management**: Prüft automatisch, ob eine neuere Version deiner aktuell installierten yabridge-Version (stabil oder Entwickler-Branch) verfügbar ist.
+- **Interaktive Installation**: Wenn keine Version installiert ist oder `--interactive` erzwungen wird, zeigt das Skript eine Liste aller verfügbaren Branches *und des neuesten stabilen Releases* zur Auswahl an.
 - **Sicheres Token-Management**: Speichert dein GitHub Personal Access Token (PAT) sicher im System-Schlüsselbund (`secret-tool`) oder als Fallback in einer mit `openssl` verschlüsselten Datei.
 - **Automatische Backups**: Erstellt vor jedem Update oder jeder Wiederherstellung ein Backup deiner aktuellen yabridge-Installation.
 - **Backup-Verwaltung**:
@@ -145,7 +147,7 @@ Beim ersten Start fragt das Skript nach einem **GitHub Personal Access Token (PA
 
 ### Befehle
 
-- **`update` (Standard)**: Sucht nach einem Update für den aktuell installierten Branch. Wenn keine Version installiert ist, startet der interaktive Modus.
+- **`update` (Standard)**: Sucht nach einem Update für die aktuell installierte Version (stabile Version oder Entwickler-Branch). Wenn keine Version installiert ist, startet der interaktive Modus.
   - `--interactive`: Erzwingt den interaktiven Modus, um einen anderen Branch auszuwählen und zu installieren.
 - **`sync`**: Führt `yabridgectl sync --prune` manuell aus, um deine VST-Plugins zu synchronisieren.
 - **`status`**: Zeigt Informationen über die aktuelle Installation an (Pfad, Version, Branch).
