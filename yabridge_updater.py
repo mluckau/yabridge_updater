@@ -777,10 +777,20 @@ def perform_self_update():
         sys.exit(1)
 
     print_info(get_string("self_update_checking"))
-    url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/main/{UPDATER_SOURCE_FILENAME}"
-    response = requests.get(url)
-    response.raise_for_status()
-    latest_content = response.text
+
+    # Versuche zuerst 'main', dann 'master' als Fallback
+    branches_to_try = ["main", "master"]
+    latest_content = None
+    for branch in branches_to_try:
+        url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/{branch}/{UPDATER_SOURCE_FILENAME}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            latest_content = response.text
+            break
+
+    if latest_content is None:
+        # Wenn beide fehlschlagen, löse den Fehler des letzten Versuchs aus
+        response.raise_for_status()
 
     current_script_path = Path(__file__).resolve()
     current_content = current_script_path.read_text()

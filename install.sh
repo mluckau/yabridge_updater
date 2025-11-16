@@ -142,10 +142,15 @@ main() {
         local download_successful=false
         for branch in "${branches_to_try[@]}"; do
             local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/${branch}/$SCRIPT_NAME"
-            if command -v curl &>/dev/null; then
-                curl -L -s -f -o "$SCRIPT_NAME" "$script_url" && download_successful=true && break
-            elif command -v wget &>/dev/null; then
-                wget -q -O "$SCRIPT_NAME" "$script_url" && download_successful=true && break
+            if command -v curl &> /dev/null; then
+                # -f/--fail lässt curl bei HTTP-Fehlern (wie 404) mit einem Fehlercode beenden
+                if curl -L -s -f -o "$SCRIPT_NAME" "$script_url"; then
+                    download_successful=true && break
+                fi
+            elif command -v wget &> /dev/null; then
+                if wget -q -O "$SCRIPT_NAME" "$script_url"; then
+                    download_successful=true && break
+                fi
             else
                 error "$MSG_ERR_NO_DOWNLOAD_TOOL"
             fi
