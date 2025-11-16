@@ -1,8 +1,8 @@
 # Yabridge Updater
 
-Ein Kommandozeilen-Tool zum einfachen Herunterladen, Installieren und Verwalten von Entwicklerversionen von [yabridge](https://github.com/robbert-vdh/yabridge) direkt von GitHub Actions.
+Ein Kommandozeilen-Tool zum einfachen Herunterladen, Installieren und Verwalten von stabilen und Entwicklerversionen von [yabridge](https://github.com/robbert-vdh/yabridge) direkt von GitHub.
 
-This is a command-line tool to easily download, install, and manage development versions of [yabridge](https://github.com/robbert-vdh/yabridge) directly from GitHub Actions.
+This is a command-line tool to easily download, install, and manage stable and development versions of [yabridge](https://github.com/robbert-vdh/yabridge) directly from GitHub.
 
 ---
 
