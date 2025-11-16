@@ -49,6 +49,7 @@ MSG_INFO_ARCH_DETECTED=""
 MSG_INFO_SUSE_DETECTED=""
 MSG_ERR_NO_PKG_MANAGER=""
 MSG_SUCCESS_DEPS_INSTALLED=""
+MSG_SUCCESS_DEPS_ALREADY_INSTALLED=""
 MSG_INFO_INSTALLING_SCRIPT=""
 MSG_SUCCESS_SCRIPT_COPIED=""
 MSG_ERR_COPY_FAILED=""
@@ -77,6 +78,7 @@ if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_INFO_SUSE_DETECTED="openSUSE-basiertes System erkannt (zypper)."
     MSG_ERR_NO_PKG_MANAGER="Konnte keinen unterstützten Paketmanager (apt, dnf, pacman, zypper) finden."
     MSG_SUCCESS_DEPS_INSTALLED="Systemabhängigkeiten erfolgreich installiert."
+    MSG_SUCCESS_DEPS_ALREADY_INSTALLED="Alle Systemabhängigkeiten sind bereits installiert."
     MSG_INFO_INSTALLING_SCRIPT="Installiere das Skript nach"
     MSG_SUCCESS_SCRIPT_COPIED="Skript erfolgreich kopiert."
     MSG_ERR_COPY_FAILED="Kopieren des Skripts nach '$INSTALL_PATH' fehlgeschlagen."
@@ -104,6 +106,7 @@ else
     MSG_INFO_SUSE_DETECTED="openSUSE-based system detected (zypper)."
     MSG_ERR_NO_PKG_MANAGER="Could not find a supported package manager (apt, dnf, pacman, zypper)."
     MSG_SUCCESS_DEPS_INSTALLED="System dependencies installed successfully."
+    MSG_SUCCESS_DEPS_ALREADY_INSTALLED="All system dependencies are already installed."
     MSG_INFO_INSTALLING_SCRIPT="Installing the script to"
     MSG_SUCCESS_SCRIPT_COPIED="Script copied successfully."
     MSG_ERR_COPY_FAILED="Failed to copy the script to '$INSTALL_PATH'."
@@ -171,28 +174,66 @@ main() {
     info "$MSG_INFO_DETECT_PKG"
     
     PKG_MANAGER=""
+    local deps_to_install=()
+
     if command -v apt-get &>/dev/null; then
         PKG_MANAGER="apt"
         info "$MSG_INFO_DEBIAN_DETECTED"
-        apt-get update
-        apt-get install -y python3 python3-pip git openssl libsecret-tools python3-requests wine
+        local deps=("python3" "python3-pip" "git" "openssl" "libsecret-tools" "python3-requests" "wine")
+        for dep in "${deps[@]}"; do
+            if ! dpkg -s "$dep" &>/dev/null; then
+                deps_to_install+=("$dep")
+            fi
+        done
+        if [ ${#deps_to_install[@]} -gt 0 ]; then
+            apt-get update
+            apt-get install -y "${deps_to_install[@]}"
+        fi
     elif command -v dnf &>/dev/null; then
         PKG_MANAGER="dnf"
         info "$MSG_INFO_FEDORA_DETECTED"
-        dnf install -y python3 python3-pip git openssl libsecret python3-requests wine
+        local deps=("python3" "python3-pip" "git" "openssl" "libsecret" "python3-requests" "wine")
+        for dep in "${deps[@]}"; do
+            if ! dnf list installed "$dep" &>/dev/null; then
+                deps_to_install+=("$dep")
+            fi
+        done
+        if [ ${#deps_to_install[@]} -gt 0 ]; then
+            dnf install -y "${deps_to_install[@]}"
+        fi
     elif command -v pacman &>/dev/null; then
         PKG_MANAGER="pacman"
         info "$MSG_INFO_ARCH_DETECTED"
-        pacman -Sy --noconfirm python python-pip git openssl libsecret python-requests wine
+        local deps=("python" "python-pip" "git" "openssl" "libsecret" "python-requests" "wine")
+        for dep in "${deps[@]}"; do
+            if ! pacman -Q "$dep" &>/dev/null; then
+                deps_to_install+=("$dep")
+            fi
+        done
+        if [ ${#deps_to_install[@]} -gt 0 ]; then
+            pacman -Sy --noconfirm "${deps_to_install[@]}"
+        fi
     elif command -v zypper &>/dev/null; then
         PKG_MANAGER="zypper"
         info "$MSG_INFO_SUSE_DETECTED"
-        zypper install -y python3 python3-pip git openssl libsecret-tools python3-requests wine
+        local deps=("python3" "python3-pip" "git" "openssl" "libsecret-tools" "python3-requests" "wine")
+        for dep in "${deps[@]}"; do
+            if ! rpm -q "$dep" &>/dev/null; then
+                deps_to_install+=("$dep")
+            fi
+        done
+        if [ ${#deps_to_install[@]} -gt 0 ]; then
+            zypper install -y "${deps_to_install[@]}"
+        fi
     else
         error "$MSG_ERR_NO_PKG_MANAGER"
     fi
 
-    success "$MSG_SUCCESS_DEPS_INSTALLED"
+    if [ ${#deps_to_install[@]} -gt 0 ]; then
+        success "$MSG_SUCCESS_DEPS_INSTALLED"
+    else
+        success "$MSG_SUCCESS_DEPS_ALREADY_INSTALLED"
+    fi
 
     # 4. Das Skript nach /usr/local/bin kopieren
     info "${MSG_INFO_INSTALLING_SCRIPT} '$INSTALL_PATH/$INSTALL_NAME'..."
