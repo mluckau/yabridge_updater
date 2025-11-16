@@ -86,7 +86,7 @@ if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_ERR_PERMS_FAILED="Setzen der Ausführrechte fehlgeschlagen."
     MSG_SUCCESS_INSTALL_COMPLETE="Installation abgeschlossen!"
     MSG_INFO_HOW_TO_RUN="Du kannst das Skript jetzt von überall mit dem Befehl '$INSTALL_NAME' ausführen."
-    MSG_INFO_FIRST_RUN="Führe den Updater zum ersten Mal aus, um yabridge zu installieren..."
+    MSG_INFO_FIRST_RUN="Führe nun '$INSTALL_NAME' in deinem Terminal aus, um die Installation von yabridge zu starten."
     MSG_WARN_NO_SUDO_USER="Konnte den ursprünglichen Benutzer nicht ermitteln. Bitte führe den Updater manuell aus:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Verwende benutzerdefinierten Pfad:"
@@ -113,7 +113,7 @@ else
     MSG_ERR_PERMS_FAILED="Failed to set execution permissions."
     MSG_SUCCESS_INSTALL_COMPLETE="Installation complete!"
     MSG_INFO_HOW_TO_RUN="You can now run the script from anywhere using the command '$INSTALL_NAME'."
-    MSG_INFO_FIRST_RUN="Running the updater for the first time to install yabridge..."
+    MSG_INFO_FIRST_RUN="Now run '$INSTALL_NAME' in your terminal to start the yabridge installation."
     MSG_WARN_NO_SUDO_USER="Could not determine the original user. Please run the updater manually:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Using custom path:"
@@ -217,21 +217,7 @@ main() {
     echo
     success "$MSG_SUCCESS_INSTALL_COMPLETE"
     info "${MSG_INFO_HOW_TO_RUN}"
-
-    # 7. Den Updater zum ersten Mal ausführen (als der ursprüngliche Benutzer)
-    info "$MSG_INFO_FIRST_RUN"
-    if [ -z "$SUDO_USER" ]; then
-        warning "$MSG_WARN_NO_SUDO_USER"
-        warning "$MSG_WARN_RUN_MANUALLY"
-        exit 0
-    fi
-
-    if [ -n "$1" ]; then
-        info "${MSG_INFO_CUSTOM_PATH} $1"
-        sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME" --install-path "$1"
-    else
-        sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME"
-    fi
+    info "${MSG_INFO_FIRST_RUN}"
 
     # 8. Temporär heruntergeladenes Skript aufräumen
     if [ "$downloaded_script" = true ]; then
