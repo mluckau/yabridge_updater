@@ -136,30 +136,6 @@ remove_path_from_shell_configs() {
     done
 }
 
-download_self_if_needed() {
-    # Diese Funktion wird benötigt, wenn uninstall.sh via curl ausgeführt wird
-    # und die Funktion remove_path_from_shell_configs das Python-Skript benötigt,
-    # um den benutzerdefinierten Pfad zu lesen.
-    if [ ! -f "yabridge_updater.py" ]; then
-        info "$MSG_INFO_DOWNLOADING_SCRIPT"
-        local branches_to_try=("main" "master")
-        local download_successful=false
-        for branch in "${branches_to_try[@]}"; do
-            local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/${branch}/yabridge_updater.py"
-            if command -v curl &>/dev/null; then
-                if curl -L -s -f -o "yabridge_updater.py" "$script_url"; then
-                    download_successful=true && break
-                fi
-            elif command -v wget &>/dev/null; then
-                if wget -q -O "yabridge_updater.py" "$script_url"; then
-                    download_successful=true && break
-                fi
-            fi
-        done
-        # Kein Fehler, wenn es fehlschlägt, da es nur für den benutzerdefinierten Pfad benötigt wird
-    fi
-}
-
 main() {
     info "${MSG_START_UNINSTALL} '$INSTALL_NAME'..."
 
@@ -167,9 +143,6 @@ main() {
     if [ "$(id -u)" -ne 0 ]; then
         error "$MSG_ERR_NEED_ROOT"
     fi
-
-    # Lade das Python-Skript herunter, falls es für die Pfad-Ermittlung benötigt wird
-    download_self_if_needed
 
     # 2. Den ursprünglichen Benutzer ermitteln
     if [ -n "$SUDO_USER" ]; then
@@ -225,10 +198,10 @@ main() {
                 success "$MSG_SUCCESS_YABRIDGE_DATA_DELETED"
             fi
         fi
-    fi
 
-    # 5. PATH-Eintrag aus Shell-Konfigurationen entfernen
-    remove_path_from_shell_configs "$USER_HOME" "$YABRIDGE_INSTALL_DIR"
+        # 5. PATH-Eintrag aus Shell-Konfigurationen entfernen
+        remove_path_from_shell_configs "$USER_HOME" "$YABRIDGE_INSTALL_DIR"
+    fi
 
     echo
     success "$MSG_SUCCESS_UNINSTALL_COMPLETE"
