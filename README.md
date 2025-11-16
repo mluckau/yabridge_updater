@@ -160,7 +160,7 @@ Der Installer erkennt automatisch deine Distribution (Debian/Ubuntu, Fedora, Arc
 
 ### Eigener Installationspfad für yabridge
 
-Wenn du `yabridge` selbst an einem benutzerdefinierten Ort installieren möchtest (z.B. auf einem anderen Laufwerk), kannst du den Pfad an den Installer übergeben. Dieser Pfad wird gespeichert und für alle zukünftigen Operationen verwendet. Das `install.sh`-Skript speichert diesen Pfad, sodass der `yabridge-updater` ihn beim ersten Start findet.
+Wenn du `yabridge` selbst an einem benutzerdefinierten Ort installieren möchtest (z.B. auf einem anderen Laufwerk), kannst du den Pfad an den Installer übergeben. Das `install.sh`-Skript speichert diesen Pfad in der Konfigurationsdatei, sodass der `yabridge-updater` ihn bei seinem ersten Start automatisch findet und für alle zukünftigen Operationen verwendet.
 
 ```bash
 curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash -s -- /pfad/zu/deinem/yabridge/ordner
