@@ -13,7 +13,7 @@ This is a command-line tool to easily download, install, and manage stable and d
 
 - **Flexible Version Management**: Manages both the latest **stable releases** and **development builds** from any branch.
 - **Update Management**: Automatically checks if a newer version of your currently installed yabridge version (stable or development branch) is available.
-- **Interactive Installation**: If no version is installed or forced via `--interactive`, it presents a list of all available branches *and the latest stable release* to choose from.
+- **Interactive Installation**: If no version is installed or forced via `--interactive`, it first asks whether to install the stable release (no token needed) or a development build (token needed).
 - **Secure Token Management**: Securely stores your GitHub Personal Access Token (PAT) using the system's keyring (`secret-tool`) or an `openssl`-encrypted file as a fallback.
 - **Automatic Backups**: Creates a backup of your current yabridge installation before every update or restore.
 - **Backup Management**:
@@ -54,7 +54,7 @@ yabridge-updater [command] [options]
 
 ### First Run
 
-On the first run, the script will ask for a **GitHub Personal Access Token (PAT)**. This is required to access the GitHub Actions API to download build artifacts.
+When installing a **development version** for the first time, the script will ask for a **GitHub Personal Access Token (PAT)**. This is required to access the GitHub Actions API to download build artifacts. For installing the **stable release**, no token is needed.
 
 1.  Go to github.com/settings/tokens to generate a new token.
 2.  For public repositories, the `public_repo` scope is sufficient.
@@ -98,7 +98,7 @@ The script will:
 
 - **Flexibles Versions-Management**: Verwaltet sowohl die neuesten **stabilen Releases** als auch **Entwickler-Builds** von beliebigen Branches.
 - **Update-Management**: Prüft automatisch, ob eine neuere Version deiner aktuell installierten yabridge-Version (stabil oder Entwickler-Branch) verfügbar ist.
-- **Interaktive Installation**: Wenn keine Version installiert ist oder `--interactive` erzwungen wird, zeigt das Skript eine Liste aller verfügbaren Branches *und des neuesten stabilen Releases* zur Auswahl an.
+- **Interaktive Installation**: Wenn keine Version installiert ist oder `--interactive` erzwungen wird, fragt das Skript zuerst, ob die stabile Version (kein Token benötigt) oder ein Entwickler-Build (Token benötigt) installiert werden soll.
 - **Sicheres Token-Management**: Speichert dein GitHub Personal Access Token (PAT) sicher im System-Schlüsselbund (`secret-tool`) oder als Fallback in einer mit `openssl` verschlüsselten Datei.
 - **Automatische Backups**: Erstellt vor jedem Update oder jeder Wiederherstellung ein Backup deiner aktuellen yabridge-Installation.
 - **Backup-Verwaltung**:
@@ -139,7 +139,7 @@ yabridge-updater [Befehl] [Optionen]
 
 ### Erster Start
 
-Beim ersten Start fragt das Skript nach einem **GitHub Personal Access Token (PAT)**. Dieses wird benötigt, um auf die GitHub Actions API zuzugreifen und Build-Artefakte herunterzuladen.
+Wenn du zum ersten Mal eine **Entwicklerversion** installierst, fragt das Skript nach einem **GitHub Personal Access Token (PAT)**. Dieses wird benötigt, um auf die GitHub Actions API zuzugreifen und Build-Artefakte herunterzuladen. Für die Installation der **stabilen Version** wird kein Token benötigt.
 
 1.  Gehe zu github.com/settings/tokens, um ein neues Token zu erstellen.
 2.  Für öffentliche Repositories ist der Geltungsbereich (Scope) `public_repo` ausreichend.
