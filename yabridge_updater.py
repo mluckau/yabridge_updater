@@ -4,6 +4,7 @@ import datetime
 import locale
 import getpass
 import json
+import stat
 import os
 import shutil
 import subprocess
@@ -15,6 +16,10 @@ from pathlib import Path
 
 # --- Configuration ---
 REPO = "robbert-vdh/yabridge"
+# TODO: Trage hier das GitHub-Repository ein, in dem dieses Updater-Skript gehostet wird.
+# z.B. "Benutzername/RepoName"
+UPDATER_REPO = "mluckau/yabridge_updater"
+UPDATER_SCRIPT_NAME = Path(__file__).name
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "yabridge-updater"
 TOKEN_FILE = CONFIG_DIR / "token"
@@ -148,6 +153,7 @@ TRANSLATIONS = {
     "argparse_restore_help": {"de": "Stellt eine frühere Version aus einem Backup wieder her.", "en": "Restores a previous version from a backup."},
     "argparse_prune_help": {"de": "Löscht alte Backups.", "en": "Deletes old backups."},
     "argparse_keep_help": {"de": "Anzahl der zu behaltenden Backups (Standard: 5).", "en": "Number of backups to keep (default: 5)."},
+    "argparse_self_update_help": {"de": "Aktualisiert dieses Skript auf die neueste Version von GitHub.", "en": "Updates this script to the latest version from GitHub."},
     "argparse_token_help": {"de": "Verwaltet den gespeicherten GitHub-Token.", "en": "Manages the stored GitHub token."},
     "argparse_token_clear_help": {"de": "Löscht den gespeicherten GitHub-Token.", "en": "Deletes the stored GitHub token."},
     "path_use_custom": {"de": "Verwende benutzerdefinierten Installationspfad: {path}", "en": "Using custom installation path: {path}"},
@@ -171,6 +177,12 @@ TRANSLATIONS = {
     "update_aborted": {"de": "Update abgebrochen.", "en": "Update aborted."},
     "already_latest": {"de": "Du hast bereits die aktuellste Version.", "en": "You already have the latest version."},
     "no_local_version_interactive": {"de": "Keine lokale Version gefunden oder --interactive gesetzt. Starte interaktiven Modus...", "en": "No local version found or --interactive set. Starting interactive mode..."},
+    "self_update_header": {"de": "Self-Update", "en": "Self-Update"},
+    "self_update_checking": {"de": "Suche nach einer neuen Version des Updaters...", "en": "Checking for a new version of the updater..."},
+    "self_update_repo_not_configured": {"de": "Das Repository für das Self-Update ist nicht konfiguriert. Bitte die Variable 'UPDATER_REPO' im Skript anpassen.", "en": "The repository for self-update is not configured. Please edit the 'UPDATER_REPO' variable in the script."},
+    "self_update_already_latest": {"de": "Dieses Skript ist bereits auf dem neuesten Stand.", "en": "This script is already up-to-date."},
+    "self_update_available": {"de": "Eine neue Version des Updaters ist verfügbar.", "en": "A new version of the updater is available."},
+    "self_update_restarting": {"de": "Update erfolgreich. Starte Skript neu...", "en": "Update successful. Restarting script..."},
 
     # Error Handling
     "error_network": {"de": "Ein Netzwerkfehler bei der Kommunikation mit GitHub ist aufgetreten.", "en": "A network error occurred while communicating with GitHub."},
@@ -660,6 +672,43 @@ def restore_from_backup(yabridge_dir):
         sys.exit(1)
 
 
+def perform_self_update(headers):
+    """Checks for a new version of this script and updates it."""
+    print_header(get_string("self_update_header"))
+
+    if not UPDATER_REPO or "Benutzername/RepoName" in UPDATER_REPO:
+        print_error(get_string("self_update_repo_not_configured"))
+        sys.exit(1)
+
+    print_info(get_string("self_update_checking"))
+    url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/main/{UPDATER_SCRIPT_NAME}"
+    response = requests.get(url, headers=headers)
+    response.raise_for_status()
+    latest_content = response.text
+
+    current_script_path = Path(__file__).resolve()
+    current_content = current_script_path.read_text()
+
+    if latest_content == current_content:
+        print_success(get_string("self_update_already_latest"))
+        return
+
+    print_info(get_string("self_update_available"))
+    if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
+        new_script_path = current_script_path.with_suffix('.py.new')
+        new_script_path.write_text(latest_content)
+
+        # Copy permissions from old script to new script
+        current_mode = stat.S_IMODE(os.stat(current_script_path).st_mode)
+        os.chmod(new_script_path, current_mode)
+
+        os.rename(new_script_path, current_script_path)
+        print_success(get_string("self_update_restarting"))
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    else:
+        print_info(get_string("update_aborted"))
+
+
 def handle_arguments():
     parser = argparse.ArgumentParser(
         description=get_string("argparse_description"), formatter_class=argparse.RawTextHelpFormatter)
@@ -684,6 +733,8 @@ def handle_arguments():
                               help=get_string("argparse_keep_help"))
     token_parser = subparsers.add_parser(
         "token", help=get_string("argparse_token_help"))
+    subparsers.add_parser(
+        "self-update", help=get_string("argparse_self_update_help"))
     token_parser.add_argument(
         "--clear", action="store_true", help=get_string("argparse_token_clear_help"))
     return parser.parse_args()
@@ -759,6 +810,15 @@ def main():
                 clear_tokens()
             else:
                 print_info(get_string("token_clear_usage_info"))
+            sys.exit(0)
+
+        # Self-update must be handled before other commands that need a token
+        if command == 'self-update':
+            token, _ = get_token()
+            if not token:
+                raise ValueError(get_string("token_none_available"))
+            headers = {"Authorization": f"Bearer {token}"}
+            perform_self_update(headers)
             sys.exit(0)
 
         if command == 'update':
