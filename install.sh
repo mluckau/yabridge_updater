@@ -219,6 +219,21 @@ main() {
     info "${MSG_INFO_HOW_TO_RUN}"
     info "${MSG_INFO_FIRST_RUN}"
 
+    # 7. Wenn ein benutzerdefinierter Pfad übergeben wurde, speichere ihn für den ersten Lauf.
+    # Dies wird als der ursprüngliche Benutzer ausgeführt, um die richtigen Berechtigungen zu haben.
+    if [ -n "$1" ]; then
+        if [ -n "$SUDO_USER" ]; then
+            local user_home
+            user_home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+            local config_dir="$user_home/.config/yabridge-updater"
+            local path_config_file="$config_dir/path"
+            
+            info "${MSG_INFO_CUSTOM_PATH} $1"
+            sudo -u "$SUDO_USER" mkdir -p "$config_dir"
+            echo "$1" | sudo -u "$SUDO_USER" tee "$path_config_file" > /dev/null
+        fi
+    fi
+
     # 8. Temporär heruntergeladenes Skript aufräumen
     if [ "$downloaded_script" = true ]; then
         rm -f "$SCRIPT_NAME"
