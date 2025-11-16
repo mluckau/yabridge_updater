@@ -136,13 +136,23 @@ main() {
     local downloaded_script=false
     if [ ! -f "$SCRIPT_NAME" ]; then
         info "$MSG_INFO_DOWNLOADING_SCRIPT"
-        local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/main/$SCRIPT_NAME"
-        if command -v curl &>/dev/null; then
-            curl -L -s -o "$SCRIPT_NAME" "$script_url"
-        elif command -v wget &>/dev/null; then
-            wget -q -O "$SCRIPT_NAME" "$script_url"
-        else
-            error "$MSG_ERR_NO_DOWNLOAD_TOOL"
+        
+        # Versuche zuerst 'main', dann 'master' als Fallback
+        local branches_to_try=("main" "master")
+        local download_successful=false
+        for branch in "${branches_to_try[@]}"; do
+            local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/${branch}/$SCRIPT_NAME"
+            if command -v curl &>/dev/null; then
+                curl -L -s -f -o "$SCRIPT_NAME" "$script_url" && download_successful=true && break
+            elif command -v wget &>/dev/null; then
+                wget -q -O "$SCRIPT_NAME" "$script_url" && download_successful=true && break
+            else
+                error "$MSG_ERR_NO_DOWNLOAD_TOOL"
+            fi
+        done
+
+        if [ "$download_successful" = false ]; then
+            error "$MSG_ERR_DOWNLOAD_FAILED"
         fi
 
         if [ ! -s "$SCRIPT_NAME" ]; then # Prüft, ob die Datei existiert und nicht leer ist
