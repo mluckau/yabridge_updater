@@ -92,7 +92,10 @@ TRANSLATIONS = {
     "branch_checking_branch": {"de": "  - Prüfe Branch '{name}'...", "en": "  - Checking branch '{name}'..."},
     "branch_no_artifacts_found": {"de": "Keine Branches mit erfolgreichen Builds und Artefakten gefunden.", "en": "No branches with successful builds and artifacts found."},
     "branch_select_prompt_header": {"de": "\nBitte wähle einen Branch aus, von dem installiert werden soll:", "en": "\nPlease select a branch to install from:"},
-    "branch_select_stable": {"de": "Neueste stabile Version", "en": "Latest Stable Release"},
+    "install_type_header": {"de": "Installationstyp auswählen", "en": "Select Installation Type"},
+    "install_type_prompt": {"de": "Welchen Versionstyp möchtest du installieren?", "en": "Which version type do you want to install?"},
+    "install_type_stable": {"de": "Stabile Version (empfohlen, kein Token benötigt)", "en": "Stable Release (recommended, no token needed)"},
+    "install_type_development": {"de": "Entwicklerversion (benötigt GitHub Token)", "en": "Development Build (requires GitHub Token)"},
     "branch_select_prompt": {"de": "Auswahl (1-{count}): ", "en": "Selection (1-{count}): "},
     "branch_you_selected": {"de": "Du hast Branch '{branch}' ausgewählt.", "en": "You selected branch '{branch}'."},
     "run_latest_info": {"de": "Suche nach dem letzten erfolgreichen Workflow-Lauf für Branch '{branch}'...", "en": "Searching for the latest successful workflow run for branch '{branch}'..."},
@@ -390,6 +393,23 @@ def clear_tokens():
 # --- Core Logic Functions ---
 
 
+def select_install_type():
+    """Lets the user choose between stable and development versions."""
+    print_header(get_string("install_type_header"))
+    print(f"{C.BOLD}{get_string('install_type_prompt')}{C.ENDC}")
+    print(f"  {C.OKCYAN}1){C.ENDC} {get_string('install_type_stable')}")
+    print(f"  {C.OKCYAN}2){C.ENDC} {get_string('install_type_development')}")
+
+    choice = ""
+    while choice not in ["1", "2"]:
+        choice = input(f"Auswahl (1-2): ").strip()
+
+    if choice == "1":
+        return "stable"
+    else:
+        return "development"
+
+
 def select_branch(headers, token_source):
     print_header(get_string("branch_select_header"))
     print_info(get_string("branch_loading"))
@@ -417,20 +437,16 @@ def select_branch(headers, token_source):
         raise ValueError(get_string("branch_no_artifacts_found"))
 
     print(f"\n{C.BOLD}{get_string('branch_select_prompt_header')}{C.ENDC}")
-    print(f"  {C.OKCYAN}0){C.ENDC} {get_string('branch_select_stable')}")
     for i, name in enumerate(branches_with_artifacts, 1):
         print(f"  {C.OKCYAN}{i}){C.ENDC} {name}")
 
     choice = -1
-    while not (0 <= choice <= len(branches_with_artifacts)):
+    while not (1 <= choice <= len(branches_with_artifacts)):
         try:
             choice = int(input(get_string("branch_select_prompt",
                          count=len(branches_with_artifacts))))
         except ValueError:
             pass
-
-    if choice == 0:
-        return "stable"
 
     branch = branches_with_artifacts[choice - 1]
     print_info(get_string("branch_you_selected",
@@ -752,7 +768,7 @@ def restore_from_backup(yabridge_dir):
         sys.exit(1)
 
 
-def perform_self_update(headers):
+def perform_self_update():
     """Checks for a new version of this script and updates it."""
     print_header(get_string("self_update_header"))
 
@@ -762,7 +778,7 @@ def perform_self_update(headers):
 
     print_info(get_string("self_update_checking"))
     url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/main/{UPDATER_SOURCE_FILENAME}"
-    response = requests.get(url, headers=headers)
+    response = requests.get(url)
     response.raise_for_status()
     latest_content = response.text
 
@@ -905,20 +921,11 @@ def main():
 
         # Self-update must be handled before other commands that need a token
         if command == 'self-update':
-            token, _ = get_token()
-            if not token:
-                raise ValueError(get_string("token_none_available"))
-            headers = {"Authorization": f"Bearer {token}"}
-            perform_self_update(headers)
+            perform_self_update()
             sys.exit(0)
 
         if command == 'update':
             print_header(get_string("updater_header"))
-            token, token_source = get_token()
-            if not token:
-                raise ValueError(get_string("token_none_available"))
-            headers = {"Authorization": f"Bearer {token}",
-                       "Accept": "application/vnd.github.v3+json"}
 
             version_file_in_install = yabridge_dir / ".version"
             local_info, is_interactive = None, getattr(
@@ -939,13 +946,13 @@ def main():
                 local_branch, local_sha = local_info["branch"], local_info["sha"]
 
                 if local_branch == "stable":
-                    remote_tag, assets = get_latest_stable_info(headers)
+                    remote_tag, assets = get_latest_stable_info({})
                     if remote_tag != local_sha:
                         print_info(get_string(
                             "stable_update_available", local_sha=f"{C.WARNING}{local_sha}{C.ENDC}", remote_sha=f"{C.OKGREEN}{remote_tag}{C.ENDC}"))
                         if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
                             perform_stable_installation(
-                                assets, headers, yabridge_dir, remote_tag)
+                                assets, {}, yabridge_dir, remote_tag)
                             check_and_update_path(yabridge_dir)
                             run_sync(yabridgectl_path)
                         else:
@@ -953,6 +960,12 @@ def main():
                     else:
                         print_success(get_string("already_latest"))
                 else:
+                    # Token is only needed for development branch updates
+                    token, token_source = get_token()
+                    if not token:
+                        raise ValueError(get_string("token_none_available"))
+                    headers = {"Authorization": f"Bearer {token}",
+                               "Accept": "application/vnd.github.v3+json"}
                     print_info(get_string("checking_for_updates",
                                branch=f"{C.OKCYAN}{local_branch}{C.ENDC}"))
                     remote_sha, artifacts_url = get_latest_run_info(
@@ -972,12 +985,20 @@ def main():
                         print_success(get_string("already_latest"))
             else:
                 print_info(get_string("no_local_version_interactive"))
-                branch = select_branch(headers, token_source)
-                if branch == "stable":
-                    remote_tag, assets = get_latest_stable_info(headers)
+                install_type = select_install_type()
+
+                if install_type == "stable":
+                    remote_tag, assets = get_latest_stable_info({})
                     perform_stable_installation(
-                        assets, headers, yabridge_dir, remote_tag)
+                        assets, {}, yabridge_dir, remote_tag)
                 else:
+                    # Token is only needed for development branch installation
+                    token, token_source = get_token()
+                    if not token:
+                        raise ValueError(get_string("token_none_available"))
+                    headers = {"Authorization": f"Bearer {token}",
+                               "Accept": "application/vnd.github.v3+json"}
+                    branch = select_branch(headers, token_source)
                     remote_version, artifacts_url = get_latest_run_info(
                         branch, headers)
                     perform_installation(
