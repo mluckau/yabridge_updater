@@ -1,246 +1,175 @@
 # Yabridge Updater
 
-Ein Kommandozeilen-Tool zum einfachen Herunterladen, Installieren und Verwalten von Entwickler-Builds von [yabridge](https://github.com/robbert-vdh/yabridge).
+Ein Kommandozeilen-Tool zum einfachen Herunterladen, Installieren und Verwalten von Entwicklerversionen von [yabridge](https://github.com/robbert-vdh/yabridge) direkt von GitHub Actions.
+
+This is a command-line tool to easily download, install, and manage development versions of [yabridge](https://github.com/robbert-vdh/yabridge) directly from GitHub Actions.
 
 ---
 
-A command-line tool to easily download, install, and manage development builds of [yabridge](https://github.com/robbert-vdh/yabridge).
+<details>
+<summary><strong>English Documentation</strong></summary>
 
----
+## Features
 
-## Inhaltsverzeichnis / Table of Contents
+- **Update Management**: Automatically checks if a newer version of your currently installed yabridge branch is available and prompts for installation.
+- **Interactive Installation**: If no version is installed or forced via `--interactive`, it presents a list of all available branches with successful builds to choose from.
+- **Secure Token Management**: Securely stores your GitHub Personal Access Token (PAT) using the system's keyring (`secret-tool`) or an `openssl`-encrypted file as a fallback.
+- **Automatic Backups**: Creates a backup of your current yabridge installation before every update or restore.
+- **Backup Management**:
+    - `restore`: Restore a previous version from a list of available backups.
+    - `prune-backups`: Clean up old backups to save space.
+- **Plugin Sync**: The `sync` command allows you to manually run `yabridgectl sync --prune` without performing a full update.
+- **Self-Update**: The script can update itself to the latest version from its own GitHub repository using the `self-update` command.
+- **PATH Management**: Automatically detects if the installation directory is in your shell's `PATH` and offers to add it to your `.bashrc`, `.zshrc`, or `config.fish`.
+- **Status Overview**: The `status` command shows the currently installed version, branch, and installation path.
+- **Multi-language**: The user interface is available in both English and German and autodetects the system language.
 
-- [Yabridge Updater](#yabridge-updater)
-  - [Inhaltsverzeichnis / Table of Contents](#inhaltsverzeichnis--table-of-contents)
-  - [🇩🇪 Deutsche Dokumentation](#-deutsche-dokumentation)
-    - [Features](#features)
-    - [Voraussetzungen](#voraussetzungen)
-    - [Wichtiger Hinweis: Bestehende Installationen entfernen](#wichtiger-hinweis-bestehende-installationen-entfernen)
-    - [Installation](#installation)
-    - [Benutzung (Befehle)](#benutzung-befehle)
-    - [GitHub Personal Access Token (PAT)](#github-personal-access-token-pat)
-    - [Deinstallation](#deinstallation)
-  - [🇬🇧 English Documentation](#-english-documentation)
-    - [Features](#features-1)
-    - [Prerequisites](#prerequisites)
-    - [Important Note: Remove Existing Installations](#important-note-remove-existing-installations)
-    - [Installation](#installation-1)
-    - [Usage (Commands)](#usage-commands)
-    - [GitHub Personal Access Token (PAT)](#github-personal-access-token-pat-1)
-    - [Uninstallation](#uninstallation)
+## Installation
 
----
+You can install the updater with a single command. It will download the repository, install system dependencies, and place the `yabridge-updater` script in `/usr/local/bin`.
 
-## 🇩🇪 Deutsche Dokumentation
-
-### Features
-
-*   **Automatisierte Installation**: Ein einziges Skript kümmert sich um alle Abhängigkeiten auf den gängigsten Linux-Distributionen (Debian/Ubuntu, Fedora, Arch, openSUSE).
-*   **Update-Prüfung**: Prüft automatisch, ob eine neue Version im aktuell installierten Branch verfügbar ist.
-*   **Interaktive Branch-Auswahl**: Ermöglicht die einfache Auswahl und Installation eines beliebigen Entwickler-Branches.
-*   **Sichere Token-Speicherung**: Speichert dein GitHub PAT sicher im System-Schlüsselbund (`secret-tool`) oder als verschlüsselte Datei (`openssl`), wenn kein Schlüsselbund verfügbar ist.
-*   **Backup & Restore**: Erstellt automatisch Backups vor jedem Update und ermöglicht die Wiederherstellung einer früheren Version.
-*   **Aufräumfunktion**: Löscht alte Backups, um Speicherplatz freizugeben.
-*   **PATH-Management**: Hilft dir, den `yabridge`-Pfad zu deiner Shell-Konfiguration hinzuzufügen, damit `yabridgectl` überall verfügbar ist.
-
-### Voraussetzungen
-
-*   Eine funktionierende Internetverbindung.
-*   `git`, um dieses Repository zu klonen.
-*   `sudo`-Rechte für die Installation.
-
-Das Installationsskript kümmert sich um den Rest, einschließlich `python3`, `wine`, `openssl` etc.
-
-### Wichtiger Hinweis: Bestehende Installationen entfernen
-
-Bevor du dieses Skript verwendest, **musst du unbedingt** jede bestehende `yabridge`-Version deinstallieren, die du über den Paketmanager deiner Distribution (z.B. aus den offiziellen Repositories) installiert hast. Andernfalls kann es zu Konflikten zwischen den beiden Versionen kommen.
-
-Beispiele zum Entfernen:
 ```bash
-# Für Debian/Ubuntu
-sudo apt remove yabridge
-
-# Für Arch Linux
-sudo pacman -R yabridge
-
-# Für Fedora
-sudo dnf remove yabridge
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash
 ```
 
-### Installation
+The installer automatically detects your distribution (Debian/Ubuntu, Fedora, Arch, openSUSE) and installs the following dependencies:
+`python3`, `python3-pip`, `git`, `openssl`, `libsecret-tools`, `python3-requests`, `wine`.
 
-1.  **Repository klonen:**
-    ```bash
-    git clone https://github.com/mluckau/yabridge_updater.git
-    cd yabridge-updater
-    ```
+### Custom Installation Path for yabridge
 
-2.  **Installationsskript ausführen:**
-    Das Skript installiert den Updater und führt ihn anschließend zum ersten Mal aus, um `yabridge` selbst zu installieren.
+If you want to install `yabridge` itself to a custom location (e.g., on another drive), you can pass the path to the installer. This path will be saved and used for all future operations.
 
-    *   **Standard-Installation** (installiert `yabridge` nach `~/.local/share/yabridge`):
-        ```bash
-        sudo ./install.sh
-        ```
-
-    *   **Installation in einen benutzerdefinierten Pfad**:
-        ```bash
-        sudo ./install.sh /dein/gewuenschter/pfad/fuer/yabridge
-        ```
-
-3.  **Anweisungen befolgen:**
-    Das Skript wird dich nach deinem GitHub PAT fragen und die Installation von `yabridge` abschließen.
-
-### Benutzung (Befehle)
-
-Nach der Installation kannst du `yabridge-updater` von überall im Terminal aufrufen.
-
-| Befehl | Beschreibung |
-|---|---|
-| `yabridge-updater` | Standardaktion: Prüft auf Updates für den installierten Branch und installiert sie bei Bedarf. Führt bei der Erstinstallation den interaktiven Modus aus. |
-| `yabridge-updater update` | Identisch zur Standardaktion. |
-| `yabridge-updater update --interactive` | Erzwingt die interaktive Auswahl eines Branches, auch wenn bereits eine Version installiert ist. |
-| `yabridge-updater status` | Zeigt den Installationspfad, den Branch und die Versions-ID der aktuellen `yabridge`-Installation an. |
-| `yabridge-updater restore` | Listet alle verfügbaren Backups auf und ermöglicht die Wiederherstellung einer ausgewählten Version. |
-| `yabridge-updater prune-backups [N]` | Löscht alle bis auf die `N` neuesten Backups (Standard: 5). |
-| `yabridge-updater token --clear` | Löscht den gespeicherten GitHub-Token aus dem Schlüsselbund und/oder der Konfigurationsdatei. |
-| `yabridge-updater --install-path <pfad>` | (Nur bei Erstinstallation) Gibt einen benutzerdefinierten Installationspfad für `yabridge` an. |
-
-### GitHub Personal Access Token (PAT)
-
-**Warum wird ein Token benötigt?**
-Um Artefakte (die kompilierten Programmdateien) von GitHub Actions herunterladen zu können, ist eine Authentifizierung bei der GitHub-API erforderlich.
-
-**Wie erstelle ich ein Token?**
-1.  Gehe zu github.com/settings/tokens.
-2.  Klicke auf "Generate new token" -> "Generate new token (classic)".
-3.  Gib einen Namen ein (z.B. "Yabridge Updater").
-4.  Setze ein Ablaufdatum.
-5.  Wähle den Scope `repo` aus.
-6.  Klicke auf "Generate token" und kopiere das angezeigte Token.
-
-Das Skript wird dich bei der ersten Ausführung nach diesem Token fragen.
-
-### Deinstallation
-
-1.  Navigiere in das geklonte Verzeichnis:
-    ```bash
-    cd yabridge-updater
-    ```
-
-2.  Führe das Deinstallations-Skript aus:
-    ```bash
-    sudo ./uninstall.sh
-    ```
-    Das Skript wird dich fragen, ob auch die Konfigurationsdateien und die `yabridge`-Installation selbst gelöscht werden sollen.
-
-3.  **Manuelle Bereinigung:**
-    Entferne die Zeile `export PATH="..."` oder `fish_add_path ...`, die vom Updater zu deiner Shell-Konfigurationsdatei (`~/.bashrc`, `~/.zshrc`, etc.) hinzugefügt wurde.
-
----
-
-## 🇬🇧 English Documentation
-
-### Features
-
-*   **Automated Installation**: A single script handles all dependencies on major Linux distributions (Debian/Ubuntu, Fedora, Arch, openSUSE).
-*   **Update Check**: Automatically checks if a new version is available for the currently installed branch.
-*   **Interactive Branch Selection**: Allows for easy selection and installation of any development branch.
-*   **Secure Token Storage**: Securely stores your GitHub PAT in the system keyring (`secret-tool`) or as an encrypted file (`openssl`) if no keyring is available.
-*   **Backup & Restore**: Automatically creates backups before each update and allows restoring a previous version.
-*   **Pruning**: Deletes old backups to free up disk space.
-*   **PATH Management**: Helps you add the `yabridge` path to your shell configuration, making `yabridgectl` available everywhere.
-
-### Prerequisites
-
-*   A working internet connection.
-*   `git` to clone this repository.
-*   `sudo` privileges for the installation.
-
-The installation script takes care of the rest, including `python3`, `wine`, `openssl`, etc.
-
-### Important Note: Remove Existing Installations
-
-Before using this script, you **must** uninstall any existing version of `yabridge` that you installed through your distribution's package manager (e.g., from the official repositories). Failure to do so can lead to conflicts between the two versions.
-
-Examples for removal:
 ```bash
-# For Debian/Ubuntu
-sudo apt remove yabridge
-
-# For Arch Linux
-sudo pacman -R yabridge
-
-# For Fedora
-sudo dnf remove yabridge
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash -s -- /path/to/your/custom/yabridge/folder
 ```
 
-### Installation
+## Usage
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/mluckau/yabridge_updater.git
-    cd yabridge-updater
-    ```
+Simply run the command `yabridge-updater` in your terminal.
 
-2.  **Run the installation script:**
-    The script will install the updater and then run it for the first time to install `yabridge` itself.
+```bash
+yabridge-updater [command] [options]
+```
 
-    *   **Default Installation** (installs `yabridge` to `~/.local/share/yabridge`):
-        ```bash
-        sudo ./install.sh
-        ```
+### First Run
 
-    *   **Installation to a custom path**:
-        ```bash
-        sudo ./install.sh /your/desired/path/for/yabridge
-        ```
+On the first run, the script will ask for a **GitHub Personal Access Token (PAT)**. This is required to access the GitHub Actions API to download build artifacts.
 
-3.  **Follow the instructions:**
-    The script will ask for your GitHub PAT and complete the `yabridge` installation.
+1.  Go to github.com/settings/tokens to generate a new token.
+2.  For public repositories, the `public_repo` scope is sufficient.
+3.  The script will offer to save the token securely in your system's keyring for future use.
 
-### Usage (Commands)
+### Commands
 
-After installation, you can call `yabridge-updater` from anywhere in your terminal.
+- **`update` (default)**: Checks for an update for the currently installed branch. If no version is installed, it starts the interactive mode.
+  - `--interactive`: Forces the interactive mode to select and install a different branch.
+- **`sync`**: Manually runs `yabridgectl sync --prune` to synchronize your VST plugins.
+- **`status`**: Displays information about the current installation (path, version, branch).
+- **`restore`**: Shows a list of available backups and allows you to restore one.
+- **`prune-backups [keep]`**: Deletes old backups, keeping the specified number of recent backups (default: 5).
+- **`self-update`**: Checks for a new version of the `yabridge-updater` script itself and performs an update if available.
+- **`token --clear`**: Deletes the stored GitHub token from the keyring and/or the encrypted file.
 
-| Command | Description |
-|---|---|
-| `yabridge-updater` | Default action: Checks for updates on the installed branch and installs them if available. Runs interactive mode on first install. |
-| `yabridge-updater update` | Identical to the default action. |
-| `yabridge-updater update --interactive` | Forces interactive branch selection, even if a version is already installed. |
-| `yabridge-updater status` | Displays the installation path, branch, and version ID of the current `yabridge` installation. |
-| `yabridge-updater restore` | Lists all available backups and allows restoring a selected version. |
-| `yabridge-updater prune-backups [N]` | Deletes all but the `N` most recent backups (default: 5). |
-| `yabridge-updater token --clear` | Deletes the stored GitHub token from the keyring and/or configuration file. |
-| `yabridge-updater --install-path <path>` | (On first run only) Specifies a custom installation path for `yabridge`. |
+### Global Options
 
-### GitHub Personal Access Token (PAT)
+- **`--install-path /path/to/yabridge`**: Overrides the default or saved installation path for a single run.
 
-**Why is a token needed?**
-To download artifacts (the compiled program files) from GitHub Actions, authentication with the GitHub API is required.
+## Uninstallation
 
-**How do I create a token?**
-1.  Go to github.com/settings/tokens.
-2.  Click "Generate new token" -> "Generate new token (classic)".
-3.  Enter a name (e.g., "Yabridge Updater").
-4.  Set an expiration date.
-5.  Select the `repo` scope.
-6.  Click "Generate token" and copy the displayed token.
+To completely remove the updater and all related data, run the `uninstall.sh` script from the repository.
 
-The script will ask you for this token on its first run.
+```bash
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/uninstall.sh | sudo bash
+```
 
-### Uninstallation
+The script will:
+1.  Remove the `yabridge-updater` command from `/usr/local/bin`.
+2.  Automatically remove the `PATH` entry from your shell configuration file.
+3.  Ask you interactively if you want to delete the configuration directory (`~/.config/yabridge-updater`).
+4.  Ask you interactively if you want to delete the yabridge installation and all backups.
 
-1.  Navigate to the cloned directory:
-    ```bash
-    cd yabridge-updater
-    ```
+</details>
 
-2.  Run the uninstallation script:
-    ```bash
-    sudo ./uninstall.sh
-    ```
-    The script will ask if you also want to delete the configuration files and the `yabridge` installation itself.
+<details open>
+<summary><strong>Deutsche Dokumentation</strong></summary>
 
-3.  **Manual Cleanup:**
-    Remove the `export PATH="..."` or `fish_add_path ...` line that was added by the updater to your shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.).
+## Features
+
+- **Update-Management**: Prüft automatisch, ob eine neuere Version des aktuell installierten yabridge-Branches verfügbar ist, und fragt nach der Installation.
+- **Interaktive Installation**: Wenn keine Version installiert ist oder `--interactive` erzwungen wird, zeigt das Skript eine Liste aller verfügbaren Branches mit erfolgreichen Builds zur Auswahl an.
+- **Sicheres Token-Management**: Speichert dein GitHub Personal Access Token (PAT) sicher im System-Schlüsselbund (`secret-tool`) oder als Fallback in einer mit `openssl` verschlüsselten Datei.
+- **Automatische Backups**: Erstellt vor jedem Update oder jeder Wiederherstellung ein Backup deiner aktuellen yabridge-Installation.
+- **Backup-Verwaltung**:
+    - `restore`: Stellt eine frühere Version aus einer Liste verfügbarer Backups wieder her.
+    - `prune-backups`: Räumt alte Backups auf, um Speicherplatz freizugeben.
+- **Plugin-Synchronisation**: Der `sync`-Befehl ermöglicht es, `yabridgectl sync --prune` manuell auszuführen, ohne ein komplettes Update durchzuführen.
+- **Self-Update**: Das Skript kann sich mit dem Befehl `self-update` selbst auf die neueste Version aus seinem GitHub-Repository aktualisieren.
+- **PATH-Management**: Erkennt automatisch, ob das Installationsverzeichnis im `PATH` deiner Shell enthalten ist, und bietet an, es zu deiner `.bashrc`, `.zshrc` oder `config.fish` hinzuzufügen.
+- **Status-Übersicht**: Der `status`-Befehl zeigt die aktuell installierte Version, den Branch und den Installationspfad an.
+- **Mehrsprachigkeit**: Die Benutzeroberfläche ist auf Deutsch und Englisch verfügbar und erkennt automatisch die Systemsprache.
+
+## Installation
+
+Du kannst den Updater mit einem einzigen Befehl installieren. Er lädt das Repository herunter, installiert Systemabhängigkeiten und legt das Skript `yabridge-updater` in `/usr/local/bin` ab.
+
+```bash
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash
+```
+
+Der Installer erkennt automatisch deine Distribution (Debian/Ubuntu, Fedora, Arch, openSUSE) und installiert die folgenden Abhängigkeiten:
+`python3`, `python3-pip`, `git`, `openssl`, `libsecret-tools`, `python3-requests`, `wine`.
+
+### Eigener Installationspfad für yabridge
+
+Wenn du `yabridge` selbst an einem benutzerdefinierten Ort installieren möchtest (z.B. auf einem anderen Laufwerk), kannst du den Pfad an den Installer übergeben. Dieser Pfad wird gespeichert und für alle zukünftigen Operationen verwendet.
+
+```bash
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash -s -- /pfad/zu/deinem/yabridge/ordner
+```
+
+## Benutzung
+
+Führe einfach den Befehl `yabridge-updater` in deinem Terminal aus.
+
+```bash
+yabridge-updater [Befehl] [Optionen]
+```
+
+### Erster Start
+
+Beim ersten Start fragt das Skript nach einem **GitHub Personal Access Token (PAT)**. Dieses wird benötigt, um auf die GitHub Actions API zuzugreifen und Build-Artefakte herunterzuladen.
+
+1.  Gehe zu github.com/settings/tokens, um ein neues Token zu erstellen.
+2.  Für öffentliche Repositories ist der Geltungsbereich (Scope) `public_repo` ausreichend.
+3.  Das Skript bietet an, das Token für die zukünftige Verwendung sicher in deinem System-Schlüsselbund zu speichern.
+
+### Befehle
+
+- **`update` (Standard)**: Sucht nach einem Update für den aktuell installierten Branch. Wenn keine Version installiert ist, startet der interaktive Modus.
+  - `--interactive`: Erzwingt den interaktiven Modus, um einen anderen Branch auszuwählen und zu installieren.
+- **`sync`**: Führt `yabridgectl sync --prune` manuell aus, um deine VST-Plugins zu synchronisieren.
+- **`status`**: Zeigt Informationen über die aktuelle Installation an (Pfad, Version, Branch).
+- **`restore`**: Zeigt eine Liste der verfügbaren Backups an und ermöglicht die Wiederherstellung eines Backups.
+- **`prune-backups [keep]`**: Löscht alte Backups und behält die angegebene Anzahl der neuesten Backups (Standard: 5).
+- **`self-update`**: Sucht nach einer neuen Version des `yabridge-updater`-Skripts selbst und führt bei Verfügbarkeit ein Update durch.
+- **`token --clear`**: Löscht das gespeicherte GitHub-Token aus dem Schlüsselbund und/oder der verschlüsselten Datei.
+
+### Globale Optionen
+
+- **`--install-path /pfad/zu/yabridge`**: Überschreibt den standardmäßigen oder gespeicherten Installationspfad für einen einzelnen Durchlauf.
+
+## Deinstallation
+
+Um den Updater und alle zugehörigen Daten vollständig zu entfernen, führe das `uninstall.sh`-Skript aus dem Repository aus.
+
+```bash
+curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/uninstall.sh | sudo bash
+```
+
+Das Skript wird:
+1.  Den Befehl `yabridge-updater` aus `/usr/local/bin` entfernen.
+2.  Den `PATH`-Eintrag automatisch aus deiner Shell-Konfigurationsdatei entfernen.
+3.  Dich interaktiv fragen, ob das Konfigurationsverzeichnis (`~/.config/yabridge-updater`) gelöscht werden soll.
+4.  Dich interaktiv fragen, ob die yabridge-Installation und alle Backups gelöscht werden sollen.
+
+</details>

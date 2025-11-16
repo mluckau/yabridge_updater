@@ -62,6 +62,9 @@ MSG_INFO_FIRST_RUN=""
 MSG_WARN_NO_SUDO_USER=""
 MSG_WARN_RUN_MANUALLY=""
 MSG_INFO_CUSTOM_PATH=""
+MSG_INFO_DOWNLOADING_SCRIPT=""
+MSG_ERR_DOWNLOAD_FAILED=""
+MSG_ERR_NO_DOWNLOAD_TOOL=""
 
 if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_START_INSTALL="Starte die Installation von"
@@ -87,6 +90,9 @@ if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_WARN_NO_SUDO_USER="Konnte den ursprünglichen Benutzer nicht ermitteln. Bitte führe den Updater manuell aus:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Verwende benutzerdefinierten Pfad:"
+    MSG_INFO_DOWNLOADING_SCRIPT="Lade '$SCRIPT_NAME' von GitHub herunter..."
+    MSG_ERR_DOWNLOAD_FAILED="Herunterladen von '$SCRIPT_NAME' fehlgeschlagen."
+    MSG_ERR_NO_DOWNLOAD_TOOL="Zum Herunterladen wird 'curl' oder 'wget' benötigt, wurde aber nicht gefunden."
 else
     MSG_START_INSTALL="Starting the installation of"
     MSG_ERR_NEED_ROOT="This script must be run with sudo or as root. Example: sudo ./install.sh"
@@ -111,6 +117,9 @@ else
     MSG_WARN_NO_SUDO_USER="Could not determine the original user. Please run the updater manually:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Using custom path:"
+    MSG_INFO_DOWNLOADING_SCRIPT="Downloading '$SCRIPT_NAME' from GitHub..."
+    MSG_ERR_DOWNLOAD_FAILED="Failed to download '$SCRIPT_NAME'."
+    MSG_ERR_NO_DOWNLOAD_TOOL="Either 'curl' or 'wget' is required for download, but was not found."
 fi
 
 # --- Hauptlogik ---
@@ -123,9 +132,24 @@ main() {
         error "$MSG_ERR_NEED_ROOT"
     fi
 
-    # 2. Prüfen, ob die Quelldatei existiert
+    # 2. Prüfen, ob die Quelldatei existiert, oder herunterladen
+    local downloaded_script=false
     if [ ! -f "$SCRIPT_NAME" ]; then
-        error "$MSG_ERR_SCRIPT_NOT_FOUND"
+        info "$MSG_INFO_DOWNLOADING_SCRIPT"
+        local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/main/$SCRIPT_NAME"
+        if command -v curl &>/dev/null; then
+            curl -L -s -o "$SCRIPT_NAME" "$script_url"
+        elif command -v wget &>/dev/null; then
+            wget -q -O "$SCRIPT_NAME" "$script_url"
+        else
+            error "$MSG_ERR_NO_DOWNLOAD_TOOL"
+        fi
+
+        if [ ! -s "$SCRIPT_NAME" ]; then # Prüft, ob die Datei existiert und nicht leer ist
+            rm -f "$SCRIPT_NAME" # Aufräumen
+            error "$MSG_ERR_DOWNLOAD_FAILED"
+        fi
+        downloaded_script=true
     fi
 
     # 3. Paketmanager erkennen und Abhängigkeiten installieren
@@ -192,6 +216,11 @@ main() {
         sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME" --install-path "$1"
     else
         sudo -u "$SUDO_USER" "$INSTALL_PATH/$INSTALL_NAME"
+    fi
+
+    # 8. Temporär heruntergeladenes Skript aufräumen
+    if [ "$downloaded_script" = true ]; then
+        rm -f "$SCRIPT_NAME"
     fi
 }
 
