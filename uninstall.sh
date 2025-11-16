@@ -146,11 +146,11 @@ download_self_if_needed() {
         local download_successful=false
         for branch in "${branches_to_try[@]}"; do
             local script_url="https://raw.githubusercontent.com/mluckau/yabridge_updater/${branch}/yabridge_updater.py"
-            if command -v curl &> /dev/null; then
+            if command -v curl &>/dev/null; then
                 if curl -L -s -f -o "yabridge_updater.py" "$script_url"; then
                     download_successful=true && break
                 fi
-            elif command -v wget &> /dev/null; then
+            elif command -v wget &>/dev/null; then
                 if wget -q -O "yabridge_updater.py" "$script_url"; then
                     download_successful=true && break
                 fi
