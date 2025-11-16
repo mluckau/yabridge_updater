@@ -147,18 +147,20 @@ sudo dnf remove yabridge
 
 ## Installation
 
-Du kannst den Updater mit einem einzigen Befehl installieren. Er lädt das Repository herunter, installiert Systemabhängigkeiten und legt das Skript `yabridge-updater` in `/usr/local/bin` ab.
+Die Installation erfolgt in zwei Schritten:
+1.  **Installer ausführen**: Dies installiert die Systemabhängigkeiten und legt das Skript `yabridge-updater` in `/usr/local/bin` ab.
+2.  **Updater ausführen**: Nach der Installation führst du den Befehl `yabridge-updater` selbst aus, um die interaktive Einrichtung von `yabridge` zu starten.
 
 ```bash
+# 1. Installer ausführen
 curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash
-```
 
 Der Installer erkennt automatisch deine Distribution (Debian/Ubuntu, Fedora, Arch, openSUSE) und installiert die folgenden Abhängigkeiten:
 `python3`, `python3-pip`, `git`, `openssl`, `libsecret-tools`, `python3-requests`, `wine`.
 
 ### Eigener Installationspfad für yabridge
 
-Wenn du `yabridge` selbst an einem benutzerdefinierten Ort installieren möchtest (z.B. auf einem anderen Laufwerk), kannst du den Pfad an den Installer übergeben. Dieser Pfad wird gespeichert und für alle zukünftigen Operationen verwendet.
+Wenn du `yabridge` selbst an einem benutzerdefinierten Ort installieren möchtest (z.B. auf einem anderen Laufwerk), kannst du den Pfad an den Installer übergeben. Dieser Pfad wird gespeichert und für alle zukünftigen Operationen verwendet. Das `install.sh`-Skript speichert diesen Pfad, sodass der `yabridge-updater` ihn beim ersten Start findet.
 
 ```bash
 curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash -s -- /pfad/zu/deinem/yabridge/ordner
