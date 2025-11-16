@@ -43,11 +43,13 @@ sudo dnf remove yabridge
 
 ## Installation
 
-You can install the updater with a single command. It will download the repository, install system dependencies, and place the `yabridge-updater` script in `/usr/local/bin`.
+The installation is a two-step process:
+1.  **Run the installer**: This will install system dependencies and place the `yabridge-updater` script in `/usr/local/bin`.
+2.  **Run the updater**: After the installation, you run the `yabridge-updater` command yourself to start the interactive setup for `yabridge`.
 
 ```bash
+# 1. Run the installer
 curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.sh | sudo bash
-```
 
 The installer automatically detects your distribution (Debian/Ubuntu, Fedora, Arch, openSUSE) and installs the following dependencies:
 `python3`, `python3-pip`, `git`, `openssl`, `libsecret-tools`, `python3-requests`, `wine`.
@@ -62,10 +64,11 @@ curl -L https://raw.githubusercontent.com/mluckau/yabridge_updater/main/install.
 
 ## Usage
 
-Simply run the command `yabridge-updater` in your terminal.
+After the installation is complete, run the command in your terminal to set up `yabridge`:
 
 ```bash
-yabridge-updater [command] [options]
+# 2. Run the updater for the first time
+yabridge-updater
 ```
 
 ### First Run
