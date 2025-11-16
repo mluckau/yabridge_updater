@@ -55,6 +55,9 @@ MSG_INFO_REMOVING_PATH_ENTRY=""
 MSG_SUCCESS_PATH_ENTRY_REMOVED=""
 MSG_SUCCESS_UNINSTALL_COMPLETE=""
 MSG_INFO_RESTART_TERMINAL=""
+MSG_INFO_DOWNLOADING_SCRIPT=""
+MSG_ERR_DOWNLOAD_FAILED=""
+MSG_ERR_NO_DOWNLOAD_TOOL=""
 
 if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_START_UNINSTALL="Starte die Deinstallation von"
@@ -75,6 +78,9 @@ if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_SUCCESS_PATH_ENTRY_REMOVED="PATH-Eintrag entfernt."
     MSG_SUCCESS_UNINSTALL_COMPLETE="Deinstallation abgeschlossen!"
     MSG_INFO_RESTART_TERMINAL="Möglicherweise musst du dein Terminal neu starten, damit die PATH-Änderungen wirksam werden."
+    MSG_INFO_DOWNLOADING_SCRIPT="Lade '${SCRIPT_NAME}' von GitHub herunter..."
+    MSG_ERR_DOWNLOAD_FAILED="Herunterladen von '${SCRIPT_NAME}' fehlgeschlagen."
+    MSG_ERR_NO_DOWNLOAD_TOOL="Zum Herunterladen wird 'curl' oder 'wget' benötigt, wurde aber nicht gefunden."
 else
     MSG_START_UNINSTALL="Starting the uninstallation of"
     MSG_ERR_NEED_ROOT="This script must be run with sudo or as root. Example: sudo ./uninstall.sh"
@@ -94,6 +100,9 @@ else
     MSG_SUCCESS_PATH_ENTRY_REMOVED="PATH entry removed."
     MSG_SUCCESS_UNINSTALL_COMPLETE="Uninstallation complete!"
     MSG_INFO_RESTART_TERMINAL="You may need to restart your terminal for the PATH changes to take effect."
+    MSG_INFO_DOWNLOADING_SCRIPT="Downloading '${SCRIPT_NAME}' from GitHub..."
+    MSG_ERR_DOWNLOAD_FAILED="Failed to download '${SCRIPT_NAME}'."
+    MSG_ERR_NO_DOWNLOAD_TOOL="Either 'curl' or 'wget' is required for download, but was not found."
 fi
 
 remove_path_from_shell_configs() {

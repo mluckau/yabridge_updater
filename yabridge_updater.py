@@ -92,12 +92,15 @@ TRANSLATIONS = {
     "branch_checking_branch": {"de": "  - Prüfe Branch '{name}'...", "en": "  - Checking branch '{name}'..."},
     "branch_no_artifacts_found": {"de": "Keine Branches mit erfolgreichen Builds und Artefakten gefunden.", "en": "No branches with successful builds and artifacts found."},
     "branch_select_prompt_header": {"de": "\nBitte wähle einen Branch aus, von dem installiert werden soll:", "en": "\nPlease select a branch to install from:"},
+    "branch_select_stable": {"de": "Neueste stabile Version", "en": "Latest Stable Release"},
     "branch_select_prompt": {"de": "Auswahl (1-{count}): ", "en": "Selection (1-{count}): "},
     "branch_you_selected": {"de": "Du hast Branch '{branch}' ausgewählt.", "en": "You selected branch '{branch}'."},
     "run_latest_info": {"de": "Suche nach dem letzten erfolgreichen Workflow-Lauf für Branch '{branch}'...", "en": "Searching for the latest successful workflow run for branch '{branch}'..."},
     "run_no_successful": {"de": "Keine erfolgreichen Workflow-Läufe für diesen Branch gefunden.", "en": "No successful workflow runs found for this branch."},
     "run_no_version_id": {"de": "Konnte die Remote-Versions-ID oder Artefakt-URL nicht ermitteln.", "en": "Could not determine remote version ID or artifact URL."},
-
+    "stable_release_header": {"de": "Stabile Version", "en": "Stable Release"},
+    "stable_checking": {"de": "Suche nach der neuesten stabilen Version...", "en": "Checking for the latest stable release..."},
+    "stable_no_release": {"de": "Konnte keine stabile Version finden.", "en": "Could not find a stable release."},
     # Installation
     "install_preparing": {"de": "Installation wird vorbereitet", "en": "Preparing Installation"},
     "install_getting_artifacts": {"de": "Rufe Artefakt-Liste ab...", "en": "Fetching artifact list..."},
@@ -173,6 +176,7 @@ TRANSLATIONS = {
     "version_file_corrupt_interactive": {"de": "Lokale .version-Datei ist korrupt. Wechsle in den interaktiven Modus.", "en": "Local .version file is corrupt. Switching to interactive mode."},
     "checking_for_updates": {"de": "Prüfe auf Updates für den installierten Branch '{branch}'...", "en": "Checking for updates for installed branch '{branch}'..."},
     "update_available": {"de": "Update von {local_sha} auf {remote_sha} für Branch '{branch}' verfügbar.", "en": "Update from {local_sha} to {remote_sha} available for branch '{branch}'."},
+    "stable_update_available": {"de": "Update von Version {local_sha} auf {remote_sha} verfügbar.", "en": "Update from version {local_sha} to {remote_sha} available."},
     "install_now_prompt": {"de": "Jetzt installieren? (J/n)", "en": "Install now? (Y/n)"},
     "update_aborted": {"de": "Update abgebrochen.", "en": "Update aborted."},
     "already_latest": {"de": "Du hast bereits die aktuellste Version.", "en": "You already have the latest version."},
@@ -413,16 +417,20 @@ def select_branch(headers, token_source):
         raise ValueError(get_string("branch_no_artifacts_found"))
 
     print(f"\n{C.BOLD}{get_string('branch_select_prompt_header')}{C.ENDC}")
+    print(f"  {C.OKCYAN}0){C.ENDC} {get_string('branch_select_stable')}")
     for i, name in enumerate(branches_with_artifacts, 1):
         print(f"  {C.OKCYAN}{i}){C.ENDC} {name}")
 
     choice = -1
-    while not (1 <= choice <= len(branches_with_artifacts)):
+    while not (0 <= choice <= len(branches_with_artifacts)):
         try:
             choice = int(input(get_string("branch_select_prompt",
                          count=len(branches_with_artifacts))))
         except ValueError:
             pass
+
+    if choice == 0:
+        return "stable"
 
     branch = branches_with_artifacts[choice - 1]
     print_info(get_string("branch_you_selected",
@@ -446,6 +454,21 @@ def get_latest_run_info(branch, headers):
     if not remote_version or not artifacts_url:
         raise ValueError(get_string("run_no_version_id"))
     return remote_version, artifacts_url
+
+
+def get_latest_stable_info(headers):
+    print_header(get_string("stable_release_header"))
+    print_info(get_string("stable_checking"))
+    url = f"https://api.github.com/repos/{REPO}/releases/latest"
+    response = requests.get(url, headers=headers)
+    check_rate_limit(response)
+    response.raise_for_status()
+    release_json = response.json()
+
+    if not release_json or not release_json.get("tag_name"):
+        raise ValueError(get_string("stable_no_release"))
+
+    return release_json["tag_name"], release_json["assets"]
 
 
 def download_and_extract(name, url, headers, tmp_path, yabridge_dir):
@@ -498,6 +521,38 @@ def download_and_extract(name, url, headers, tmp_path, yabridge_dir):
             tar.extractall(path=yabridge_dir, members=members)
 
 
+def download_and_extract_stable(asset, headers, tmp_path, yabridge_dir):
+    print_info(get_string("install_downloading",
+               name=f"{C.OKCYAN}{asset['name']}{C.ENDC}"))
+    url = asset["browser_download_url"]
+    dl_response = requests.get(
+        url, headers=headers, allow_redirects=True, stream=True)
+    check_rate_limit(dl_response)
+    dl_response.raise_for_status()
+    total_size = int(dl_response.headers.get('content-length', 0))
+    tar_path = tmp_path / asset["name"]
+
+    with open(tar_path, 'wb') as f:
+        if total_size > 0:
+            print_progress_bar(0, total_size, prefix=f"{C.OKGREEN}{get_string('progress_prefix')}{C.ENDC}", suffix=get_string(
+                'progress_suffix'), length=40)
+        downloaded_size = 0
+        for chunk in dl_response.iter_content(chunk_size=8192):
+            f.write(chunk)
+            downloaded_size += len(chunk)
+            if total_size > 0:
+                print_progress_bar(downloaded_size, total_size, prefix=f"{C.OKGREEN}{get_string('progress_prefix')}{C.ENDC}", suffix=get_string(
+                    'progress_suffix'), length=40)
+    sys.stdout.write('\n')
+    sys.stdout.flush()
+
+    if not tarfile.is_tarfile(tar_path):
+        raise IOError(get_string("install_no_tar", name=asset["name"]))
+
+    with tarfile.open(tar_path, "r:gz") as tar:
+        tar.extractall(path=yabridge_dir)
+
+
 def perform_installation(artifacts_url, headers, yabridge_dir, remote_version, branch_name):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
@@ -538,6 +593,31 @@ def perform_installation(artifacts_url, headers, yabridge_dir, remote_version, b
                       version=f"{C.BOLD}{remote_version[:7]}{C.ENDC}"))
         print_info(get_string("install_path_saved",
                    path_file=f"{C.OKCYAN}{PATH_CONFIG_FILE}{C.ENDC}"))
+
+
+def perform_stable_installation(assets, headers, yabridge_dir, remote_version):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp_path = Path(tmpdir)
+        print_header(get_string("install_preparing"))
+
+        asset = next((a for a in assets if a["name"] ==
+                     f"yabridge-{remote_version.lstrip('v')}.tar.gz"), None)
+        if not asset:
+            raise ValueError(get_string("install_no_artifacts_url"))
+
+        backup_base_dir = yabridge_dir.parent / "yabridge-backups"
+        if yabridge_dir.exists():
+            backup_base_dir.mkdir(exist_ok=True)
+            backup_dir = backup_base_dir / \
+                f"yabridge-backup-{datetime.datetime.now().strftime('%F-%H%M%S')}"
+            print_info(get_string("install_backing_up",
+                       backup_dir=f"{C.OKCYAN}{backup_dir}{C.ENDC}"))
+            shutil.move(str(yabridge_dir), str(backup_dir))
+        yabridge_dir.mkdir(parents=True, exist_ok=True)
+
+        download_and_extract_stable(asset, headers, tmp_path, yabridge_dir)
+        (yabridge_dir / ".version").write_text(json.dumps(
+            {"sha": remote_version, "branch": "stable"}, indent=4))
 
 
 def run_sync(yabridgectl_path):
@@ -857,30 +937,51 @@ def main():
 
             if not is_interactive and local_info and local_info.get("branch") and local_info.get("sha"):
                 local_branch, local_sha = local_info["branch"], local_info["sha"]
-                print_info(get_string("checking_for_updates",
-                           branch=f"{C.OKCYAN}{local_branch}{C.ENDC}"))
-                remote_sha, artifacts_url = get_latest_run_info(
-                    local_branch, headers)
 
-                if remote_sha != local_sha:
-                    print_info(get_string(
-                        "update_available", local_sha=f"{C.WARNING}{local_sha[:7]}{C.ENDC}", remote_sha=f"{C.OKGREEN}{remote_sha[:7]}{C.ENDC}", branch=local_branch))
-                    if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
-                        perform_installation(
-                            artifacts_url, headers, yabridge_dir, remote_sha, local_branch)
-                        check_and_update_path(yabridge_dir)
-                        run_sync(yabridgectl_path)
+                if local_branch == "stable":
+                    remote_tag, assets = get_latest_stable_info(headers)
+                    if remote_tag != local_sha:
+                        print_info(get_string(
+                            "stable_update_available", local_sha=f"{C.WARNING}{local_sha}{C.ENDC}", remote_sha=f"{C.OKGREEN}{remote_tag}{C.ENDC}"))
+                        if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
+                            perform_stable_installation(
+                                assets, headers, yabridge_dir, remote_tag)
+                            check_and_update_path(yabridge_dir)
+                            run_sync(yabridgectl_path)
+                        else:
+                            print_info(get_string("update_aborted"))
                     else:
-                        print_info(get_string("update_aborted"))
+                        print_success(get_string("already_latest"))
                 else:
-                    print_success(get_string("already_latest"))
+                    print_info(get_string("checking_for_updates",
+                               branch=f"{C.OKCYAN}{local_branch}{C.ENDC}"))
+                    remote_sha, artifacts_url = get_latest_run_info(
+                        local_branch, headers)
+
+                    if remote_sha != local_sha:
+                        print_info(get_string(
+                            "update_available", local_sha=f"{C.WARNING}{local_sha[:7]}{C.ENDC}", remote_sha=f"{C.OKGREEN}{remote_sha[:7]}{C.ENDC}", branch=local_branch))
+                        if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
+                            perform_installation(
+                                artifacts_url, headers, yabridge_dir, remote_sha, local_branch)
+                            check_and_update_path(yabridge_dir)
+                            run_sync(yabridgectl_path)
+                        else:
+                            print_info(get_string("update_aborted"))
+                    else:
+                        print_success(get_string("already_latest"))
             else:
                 print_info(get_string("no_local_version_interactive"))
                 branch = select_branch(headers, token_source)
-                remote_version, artifacts_url = get_latest_run_info(
-                    branch, headers)
-                perform_installation(artifacts_url, headers,
-                                     yabridge_dir, remote_version, branch)
+                if branch == "stable":
+                    remote_tag, assets = get_latest_stable_info(headers)
+                    perform_stable_installation(
+                        assets, headers, yabridge_dir, remote_tag)
+                else:
+                    remote_version, artifacts_url = get_latest_run_info(
+                        branch, headers)
+                    perform_installation(
+                        artifacts_url, headers, yabridge_dir, remote_version, branch)
                 check_and_update_path(yabridge_dir)
                 run_sync(yabridgectl_path)
 

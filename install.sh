@@ -90,8 +90,8 @@ if [[ "$LANG_CODE" == "de"* ]]; then
     MSG_WARN_NO_SUDO_USER="Konnte den ursprünglichen Benutzer nicht ermitteln. Bitte führe den Updater manuell aus:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Verwende benutzerdefinierten Pfad:"
-    MSG_INFO_DOWNLOADING_SCRIPT="Lade '$SCRIPT_NAME' von GitHub herunter..."
-    MSG_ERR_DOWNLOAD_FAILED="Herunterladen von '$SCRIPT_NAME' fehlgeschlagen."
+    MSG_INFO_DOWNLOADING_SCRIPT="Lade '${SCRIPT_NAME}' von GitHub herunter..."
+    MSG_ERR_DOWNLOAD_FAILED="Herunterladen von '${SCRIPT_NAME}' fehlgeschlagen."
     MSG_ERR_NO_DOWNLOAD_TOOL="Zum Herunterladen wird 'curl' oder 'wget' benötigt, wurde aber nicht gefunden."
 else
     MSG_START_INSTALL="Starting the installation of"
@@ -117,8 +117,8 @@ else
     MSG_WARN_NO_SUDO_USER="Could not determine the original user. Please run the updater manually:"
     MSG_WARN_RUN_MANUALLY="  $INSTALL_NAME"
     MSG_INFO_CUSTOM_PATH="Using custom path:"
-    MSG_INFO_DOWNLOADING_SCRIPT="Downloading '$SCRIPT_NAME' from GitHub..."
-    MSG_ERR_DOWNLOAD_FAILED="Failed to download '$SCRIPT_NAME'."
+    MSG_INFO_DOWNLOADING_SCRIPT="Downloading '${SCRIPT_NAME}' from GitHub..."
+    MSG_ERR_DOWNLOAD_FAILED="Failed to download '${SCRIPT_NAME}'."
     MSG_ERR_NO_DOWNLOAD_TOOL="Either 'curl' or 'wget' is required for download, but was not found."
 fi
 
