@@ -33,6 +33,37 @@ warning() {
     echo -e "${C_YELLOW}WARNUNG: $1${C_RESET}"
 }
 
+remove_path_from_shell_configs() {
+    local user_home=$1
+    local yabridge_install_dir=$2
+
+    if [ -z "$user_home" ] || [ -z "$yabridge_install_dir" ]; then
+        return
+    fi
+
+    info "Suche nach Shell-Konfigurationen, um den PATH-Eintrag zu entfernen..."
+
+    # Array von Shell-Konfigurationsdateien
+    local shell_configs=("$user_home/.bashrc" "$user_home/.zshrc" "$user_home/.config/fish/config.fish")
+    local marker_comment="# Added by yabridge-updater"
+    local found=false
+
+    for config_file in "${shell_configs[@]}"; do
+        if [ -f "$config_file" ] && grep -q "$marker_comment" "$config_file"; then
+            info "Entferne yabridge-updater PATH-Eintrag aus '$config_file'..."
+            # Erstellt eine temporäre Datei ohne den Block und ersetzt dann die Originaldatei
+            # Dies ist sicherer als sed -i, da es keine Probleme mit Berechtigungen unter sudo hat
+            sed "/${marker_comment}/,+1d" "$config_file" > "${config_file}.tmp"
+            # Berechtigungen und Eigentümer von der Originaldatei übernehmen
+            chown --reference="$config_file" "${config_file}.tmp"
+            chmod --reference="$config_file" "${config_file}.tmp"
+            mv "${config_file}.tmp" "$config_file"
+            success "PATH-Eintrag entfernt."
+            found=true
+        fi
+    done
+}
+
 main() {
     info "Starte die Deinstallation von '$INSTALL_NAME'..."
 
@@ -95,9 +126,12 @@ main() {
         fi
     fi
 
+    # 5. PATH-Eintrag aus Shell-Konfigurationen entfernen
+    remove_path_from_shell_configs "$USER_HOME" "$YABRIDGE_INSTALL_DIR"
+
     echo
     success "Deinstallation abgeschlossen!"
-    info "Bitte entferne die 'yabridge-updater'-Zeile manuell aus deiner Shell-Konfigurationsdatei (z.B. ~/.bashrc, ~/.zshrc)."
+    info "Möglicherweise musst du dein Terminal neu starten, damit die PATH-Änderungen wirksam werden."
 }
 
 main
