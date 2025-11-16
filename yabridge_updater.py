@@ -19,7 +19,7 @@ REPO = "robbert-vdh/yabridge"
 # TODO: Trage hier das GitHub-Repository ein, in dem dieses Updater-Skript gehostet wird.
 # z.B. "Benutzername/RepoName"
 UPDATER_REPO = "mluckau/yabridge_updater"
-UPDATER_SCRIPT_NAME = Path(__file__).name
+UPDATER_SOURCE_FILENAME = "yabridge_updater.py"
 HOME = Path.home()
 CONFIG_DIR = HOME / ".config" / "yabridge-updater"
 TOKEN_FILE = CONFIG_DIR / "token"
@@ -681,7 +681,7 @@ def perform_self_update(headers):
         sys.exit(1)
 
     print_info(get_string("self_update_checking"))
-    url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/main/{UPDATER_SCRIPT_NAME}"
+    url = f"https://raw.githubusercontent.com/{UPDATER_REPO}/main/{UPDATER_SOURCE_FILENAME}"
     response = requests.get(url, headers=headers)
     response.raise_for_status()
     latest_content = response.text
@@ -689,12 +689,23 @@ def perform_self_update(headers):
     current_script_path = Path(__file__).resolve()
     current_content = current_script_path.read_text()
 
-    if latest_content == current_content:
+    # Compare content without the shebang line to avoid updates just for shebang changes
+    current_content_body = '\n'.join(current_content.splitlines()[1:])
+    latest_content_body = '\n'.join(latest_content.splitlines()[1:])
+
+    if latest_content_body == current_content_body:
         print_success(get_string("self_update_already_latest"))
         return
 
     print_info(get_string("self_update_available"))
     if input(f"{C.WARNING}{get_string('install_now_prompt')}{C.ENDC} ").lower().strip() in ["", "j", "ja", "y", "yes"]:
+        # Preserve the shebang from the currently installed script
+        current_shebang = current_content.splitlines()[0]
+        if current_shebang.startswith("#!"):
+            latest_lines = latest_content.splitlines()
+            latest_lines[0] = current_shebang
+            latest_content = '\n'.join(latest_lines) + '\n'
+
         new_script_path = current_script_path.with_suffix('.py.new')
         new_script_path.write_text(latest_content)
 
