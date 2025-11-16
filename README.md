@@ -25,6 +25,22 @@ This is a command-line tool to easily download, install, and manage stable and d
 - **Status Overview**: The `status` command shows the currently installed version, branch, and installation path.
 - **Multi-language**: The user interface is available in both English and German and autodetects the system language.
 
+## Important Note: Remove Existing Installations
+
+Before using this script, you **must** uninstall any existing version of `yabridge` that you installed through your distribution's package manager (e.g., from the official repositories). Failure to do so can lead to conflicts between the two versions, as `yabridgectl` might be called from different locations.
+
+Examples for removal:
+```bash
+# For Debian/Ubuntu
+sudo apt remove yabridge
+
+# For Arch Linux
+sudo pacman -R yabridge
+
+# For Fedora
+sudo dnf remove yabridge
+```
+
 ## Installation
 
 You can install the updater with a single command. It will download the repository, install system dependencies, and place the `yabridge-updater` script in `/usr/local/bin`.
@@ -109,6 +125,22 @@ The script will:
 - **PATH-Management**: Erkennt automatisch, ob das Installationsverzeichnis im `PATH` deiner Shell enthalten ist, und bietet an, es zu deiner `.bashrc`, `.zshrc` oder `config.fish` hinzuzufügen.
 - **Status-Übersicht**: Der `status`-Befehl zeigt die aktuell installierte Version, den Branch und den Installationspfad an.
 - **Mehrsprachigkeit**: Die Benutzeroberfläche ist auf Deutsch und Englisch verfügbar und erkennt automatisch die Systemsprache.
+
+## Wichtiger Hinweis: Bestehende Installationen entfernen
+
+Bevor du dieses Skript verwendest, **musst du unbedingt** jede bestehende `yabridge`-Version deinstallieren, die du über den Paketmanager deiner Distribution (z.B. aus den offiziellen Repositories) installiert hast. Andernfalls kann es zu Konflikten zwischen den beiden Versionen kommen, da `yabridgectl` von unterschiedlichen Orten aufgerufen werden könnte.
+
+Beispiele zum Entfernen:
+```bash
+# Für Debian/Ubuntu
+sudo apt remove yabridge
+
+# Für Arch Linux
+sudo pacman -R yabridge
+
+# Für Fedora
+sudo dnf remove yabridge
+```
 
 ## Installation
 
